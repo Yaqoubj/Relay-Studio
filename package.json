@@ -14,7 +14,6 @@
     "dist:dir": "npm run build && electron-builder --dir",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "npm run build && playwright test",
-    "start:legacy": "electron src/main/main.js",
     "server": "tsx src/server/server.ts",
     "test:server": "tsx --test tests/server.test.ts"
   },
