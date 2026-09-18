@@ -1,7 +1,7 @@
 <p align="center"><img src="assets/relay.png" width="76" alt="Relay Studio logo" /></p>
 <h1 align="center">Relay Studio</h1>
 <p align="center"><strong>A little flow. A lot off your plate.</strong><br/>Visual desktop automation for files, documents, and optional AI.</p>
-<p align="center"><a href="https://github.com/Yaqoubj/OverLayAI/releases">Download for Windows</a> · <a href="docs/demo.md">Try the demo</a> · <a href="docs/architecture.md">Architecture</a></p>
+<p align="center"><a href="https://github.com/Yaqoubj/Relay-Studio/releases">Download for Windows</a> · <a href="docs/demo.md">Try the demo</a> · <a href="docs/architecture.md">Architecture</a></p>
 
 ![Relay Studio visual workflow editor](docs/studio.png)
 
@@ -39,7 +39,7 @@ Templates are real editable recipes. Folder paths begin empty, watchers begin pa
 
 ## Get started
 
-Download the Windows installer from [Releases](https://github.com/Yaqoubj/OverLayAI/releases). The installer is unsigned; the project does not have a commercial code-signing certificate.
+Download the Windows installer from [Releases](https://github.com/Yaqoubj/Relay-Studio/releases). The installer is unsigned; the project does not have a commercial code-signing certificate.
 
 For a first workflow, open **Download organizer**, choose source and archive folders in the step inspector, and save. Select **Test workflow**, pick a sample PDF, and preview it. Then run it for real. See the [five-minute walkthrough](docs/demo.md) for watching, undo, and a failure demonstration.
 
