@@ -103,13 +103,14 @@ button svg {
   justify-content: center;
   width: 37px;
   height: 40px;
-  background: #bba4f6;
+  background: #10252e;
+  border: 1px solid #24515a;
   border-radius: 10px;
-  color: #272033;
-  transform: rotate(-5deg);
+  color: #49dfbd;
+  overflow: hidden;
 }
 .brand-mark svg {
-  fill: currentColor;
+  display: block;
 }
 .brand > div {
   font-size: 26px;

@@ -80,6 +80,39 @@ const icons = {
   notify: Bell,
 };
 const api = window.studio;
+function RelayMark({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 256 256" aria-hidden="true" focusable="false">
+      <rect x="10" y="10" width="236" height="236" rx="58" fill="#10252e" />
+      <path
+        d="M62 68h66c23 0 42 19 42 42s-19 42-42 42H62v38"
+        fill="none"
+        stroke="#49dfbd"
+        strokeWidth="17"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M113 152l51 39h29"
+        fill="none"
+        stroke="#f1f8f5"
+        strokeWidth="17"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m177 169 25 22-25 22"
+        fill="none"
+        stroke="#f1f8f5"
+        strokeWidth="17"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="62" cy="68" r="12" fill="#f1f8f5" />
+      <circle cx="62" cy="190" r="12" fill="#49dfbd" />
+    </svg>
+  );
+}
 function StepNode({ data, selected }: NodeProps<Node<Step['data']>>) {
   const Icon = icons[data.kind];
   const detail =
@@ -369,7 +402,7 @@ export function App() {
     return (
       <div className="loading">
         <span className="brand-mark">
-          <Zap />
+          <RelayMark size={32} />
         </span>
         <h2>Opening your studio</h2>
         {toast || 'Loading local workspace…'}
@@ -380,7 +413,7 @@ export function App() {
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">
-            <Zap size={22} />
+            <RelayMark size={30} />
           </span>
           <div>
             relay<span>STUDIO</span>
@@ -483,7 +516,7 @@ export function App() {
             <ArrowRight size={14} />
           </button>
           <div className="version">
-            RELAY STUDIO <span>v1.0.0</span>
+            RELAY STUDIO <span>v1.1.1</span>
           </div>
         </div>
       </aside>
