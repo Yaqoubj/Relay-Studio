@@ -12,11 +12,13 @@ flowchart LR
   Validate --> Engine[Sequential execution engine]
   Engine --> Files[Local filesystem]
   Engine --> AI[Ollama or HTTPS cloud adapter]
-  Engine --> DB[(SQLite run journal)]
+  Engine --> DB[(Local SQLite journal)]
   Watch[Folder watcher + bounded queue] --> Engine
+  Engine -. optional sync .-> API[Relay Cloud API]
+  API --> CloudDB[(Cloud SQLite in dev)]
 ```
 
-The renderer has no Node.js or filesystem access. IPC verifies the sending frame and its local page URL. Native folder pickers create persistent canonical-folder grants. Manual input files require a file-picker grant for the current session. Imported recipes have all folder fields reset. Exported recipes omit folder paths and never contain connection credentials.
+The renderer has no Node.js or filesystem access. IPC verifies the sending frame and its local page URL. Native folder pickers create persistent canonical-folder grants. Manual input files require a file-picker grant for the current session. Imported recipes have all folder fields reset. Exported recipes omit folder paths and never contain connection credentials. The optional API owns accounts, workspaces, synced workflows, share links, and compact run summaries; local file paths and document content stay on the desktop unless a future explicit upload step is added.
 
 The Content Security Policy blocks renderer network access, remote scripts, frames, and embedded objects. All AI networking happens in the main process. Navigation and new windows are blocked.
 
@@ -58,4 +60,4 @@ Structured output requires user-selected string fields. Missing fields or invali
 
 SQLite uses WAL mode. Workflow saves and run-journal updates are individual database transactions. The history UI shows the latest 100 runs; older records remain on disk. Document excerpts (up to 5,000 characters per step), paths, and prompts are stored locally in plaintext. Credentials are encrypted, not the entire workspace. Quit the application before backing up the user-data directory, including any remaining WAL files.
 
-The core is intentionally small: no scheduling, arbitrary scripts, parallel branches, loops, spreadsheet connector, OCR, cloud synchronization, or team accounts. These are extensions, not implemented features. Windows is the tested distribution target.
+The core is intentionally small: no remote desktop-file execution, scheduling worker, arbitrary scripts, parallel branches, loops, spreadsheet connector, OCR, or team accounts. The backend supports accounts, workspace sync, sharing, and run summaries. A production deployment would move the API database to PostgreSQL, add HTTPS and managed auth, and put schedule/webhook work on a durable queue. Windows is the tested distribution target.

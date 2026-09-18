@@ -6,7 +6,7 @@
 
 ![Relay Studio workflow editor](docs/studio.png)
 
-Relay Studio turns repetitive desktop file work into connected blocks. It runs locally as an Electron app. There is no account, backend, or required AI service.
+Relay Studio turns repetitive desktop file work into connected blocks. File work runs locally in the desktop app. An optional Relay Cloud backend provides accounts, workspace sync, sharing, and run history.
 
 ## What it can do
 
@@ -46,6 +46,27 @@ For cloud AI, enter an HTTPS endpoint, a model name, and your own API key. You a
 
 AI steps can return normal text or named fields. Later steps can use values such as `{{ai.company}}`. If the response is not valid, the run stops instead of guessing. AI cannot execute shell commands; it only supplies text to the blocks you configured.
 
+## Relay Cloud backend
+
+The backend lives in `src/server`. It is a Fastify API backed by SQLite for development. It currently provides:
+
+- email/password accounts with scrypt password hashing and JWT sessions;
+- personal workspaces and member roles;
+- workflow save, update, list, and delete;
+- read-only workflow share links;
+- run summaries that keep local file contents out of the API by default.
+
+The desktop boundary is in `src/desktop/cloud.ts`. It sends workflow definitions and run summaries only. It does not upload local files or API keys.
+
+Run it locally:
+
+```powershell
+$env:RELAY_API_SECRET = 'use-a-random-value-at-least-32-characters-long'
+npm run server
+```
+
+The default address is `http://127.0.0.1:4317`. Set `RELAY_API_DATA` to choose the data folder. PostgreSQL, Redis-backed jobs, hosted authentication, and HTTPS belong in deployment; the SQLite adapter keeps local development simple and inspectable.
+
 ## Run from source
 
 You need Node.js 24+ and npm. Windows is the platform I have tested.
@@ -68,7 +89,7 @@ The tests use temporary folders and a controlled local AI server. They do not ca
 
 ## How it is built
 
-The interface is React and React Flow. The execution engine is TypeScript code in the Electron main process. SQLite stores workflows and run history. Chokidar watches folders. PDF text is extracted with `pdf-parse`.
+The interface is React and React Flow. The execution engine is TypeScript code in the Electron main process. Local SQLite stores workflows and run history. The optional Fastify API stores synced workflows, accounts, and cloud-visible run summaries. Chokidar watches folders. PDF text is extracted with `pdf-parse`.
 
 The renderer is sandboxed and only gets the specific capabilities exposed through the preload bridge. API keys are stored with the operating system credential store. Exported workflows do not include folder paths or credentials.
 
@@ -80,7 +101,7 @@ This is a portfolio project, not a finished automation product. It currently doe
 
 Watching starts paused after a restart. Undo only covers unchanged file operations. A crash between a filesystem change and its history entry can still leave work that needs manual inspection. Run history stores paths and short document excerpts locally in plain text. The installer is unsigned.
 
-These limits keep the first version focused on the workflow editor, execution engine, previews, safety checks, and history.
+These limits keep the first version focused on the workflow editor, execution engine, previews, safety checks, and history. The backend does not yet run desktop file workflows remotely, send email, or provide a hosted production database.
 
 ## License
 

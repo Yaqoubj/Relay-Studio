@@ -14,7 +14,9 @@
     "dist:dir": "npm run build && electron-builder --dir",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "npm run build && playwright test",
-    "start:legacy": "electron src/main/main.js"
+    "start:legacy": "electron src/main/main.js",
+    "server": "tsx src/server/server.ts",
+    "test:server": "tsx --test tests/server.test.ts"
   },
   "build": {
     "appId": "com.yaqoubj.relaystudio",
@@ -41,6 +43,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -54,8 +57,12 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/jwt": "^10.2.2",
+    "@fastify/sensible": "^6.0.5",
     "@xyflow/react": "^12.11.6",
     "chokidar": "^5.0.0",
+    "fastify": "^5.12.5",
     "lucide-react": "^1.47.0",
     "pdf-parse": "^2.4.5",
     "react": "^19.3.0",

@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src/studio", "src/desktop", "src/shared", "tests", "vite.config.mts"]
+  "include": ["src/studio", "src/desktop", "src/server", "src/shared", "tests", "vite.config.mts"]
 }
