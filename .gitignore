@@ -6,3 +6,10 @@ release/
 native/**/bin/
 native/**/obj/
 *.log
+build/
+test-results/
+playwright-report/
+.relay-test/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

@@ -1,41 +1,34 @@
 {
-  "name": "overlayai",
-  "version": "0.1.0",
-  "description": "Floating AI website overlay desktop app",
-  "main": "src/main/main.js",
-  "author": "OpenAI Codex",
+  "name": "relay-studio",
+  "version": "1.0.0",
+  "description": "Visual desktop automation for local files, documents, and optional AI",
+  "main": "build/main.cjs",
+  "author": "Yaqoubj",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
-    "build:hook": "dotnet publish native/QuickAI.Hook/QuickAI.Hook.csproj -c Release -r win-x64 --self-contained false -o dist/native/hook",
-    "dist": "electron-builder",
-    "dist:win": "electron-builder --win nsis portable",
-    "dist:installer": "electron-builder --win nsis",
-    "dist:dir": "electron-builder --dir"
+    "start": "npm run build && electron .",
+    "build": "tsc --noEmit && vite build && node scripts/build.mjs",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:installer": "npm run dist:win",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "test": "tsx --test tests/*.test.ts",
+    "test:e2e": "npm run build && playwright test",
+    "start:legacy": "electron src/main/main.js"
   },
   "build": {
-    "appId": "com.overlayai.app",
-    "productName": "OverlayAI",
+    "appId": "com.yaqoubj.relaystudio",
+    "productName": "Relay Studio",
     "files": [
-      "src/**/*",
+      "build/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "dist/native/hook",
-        "to": "native/hook",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
     "win": {
-      "icon": "assets/app.ico",
+      "icon": "assets/relay.ico",
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ],
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "Relay-Studio-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -43,11 +36,29 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "OverlayAI"
+      "shortcutName": "Relay Studio"
     }
   },
   "devDependencies": {
-    "electron": "^37.10.3",
-    "electron-builder": "^26.0.12"
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.4.2",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.8",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.11.6",
+    "chokidar": "^5.0.0",
+    "lucide-react": "^1.47.0",
+    "pdf-parse": "^2.4.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }

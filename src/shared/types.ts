@@ -1,0 +1,87 @@
+export type Kind =
+  'trigger' | 'filter' | 'read' | 'ai' | 'rename' | 'copy' | 'move' | 'write' | 'notify';
+export type Config = Record<string, string>;
+export type Step = {
+  id: string;
+  type: 'step';
+  position: { x: number; y: number };
+  data: { kind: Kind; label: string; config: Config; state?: string };
+};
+export type Link = {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+};
+export type Workflow = {
+  id: string;
+  name: string;
+  description: string;
+  nodes: Step[];
+  edges: Link[];
+  updatedAt: string;
+};
+export type Effect = {
+  type: 'create' | 'move';
+  path: string;
+  original?: string;
+  hash: string;
+  undone?: boolean;
+};
+export type StepResult = {
+  nodeId: string;
+  label: string;
+  kind: Kind;
+  status: 'running' | 'success' | 'failed' | 'preview' | 'skipped';
+  startedAt: string;
+  duration: number;
+  input: string;
+  output: string;
+  effect?: Effect;
+};
+export type Run = {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  workflow: Workflow;
+  source: string;
+  preview: boolean;
+  origin: 'manual' | 'watch';
+  status: 'running' | 'success' | 'failed' | 'cancelled' | 'interrupted';
+  startedAt: string;
+  finishedAt?: string;
+  steps: StepResult[];
+  error?: string;
+  undone?: boolean;
+};
+export type AISettings = {
+  provider: 'ollama' | 'cloud';
+  endpoint: string;
+  model: string;
+  hasKey: boolean;
+  allowCloud: boolean;
+};
+export type Snapshot = {
+  workflows: Workflow[];
+  runs: Run[];
+  watching: string[];
+  settings: AISettings;
+  busy: boolean;
+};
+export interface StudioAPI {
+  snapshot(): Promise<Snapshot>;
+  save(workflow: Workflow): Promise<Workflow>;
+  remove(id: string): Promise<boolean>;
+  chooseFolder(): Promise<string | null>;
+  chooseFile(): Promise<string | null>;
+  execute(id: string, source: string, preview: boolean): Promise<Run>;
+  cancel(): Promise<void>;
+  watch(id: string, enabled: boolean): Promise<void>;
+  undo(id: string): Promise<void>;
+  exportWorkflow(id: string): Promise<boolean>;
+  importWorkflow(): Promise<Workflow | null>;
+  settings(settings: AISettings & { apiKey?: string }): Promise<AISettings>;
+  testAI(): Promise<string>;
+  onUpdate(callback: () => void): () => void;
+}
