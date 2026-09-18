@@ -9,6 +9,8 @@
 7. Enable watching and copy a different PDF into `Inbox`. After the file stabilizes, the workflow runs automatically. Pause watching when done.
 8. Open **Run history** and inspect the manual and watched runs.
 
+To organize files that are already present, open the same workflow and choose **Organize existing folder**. Pick `Inbox`, enable **Include files inside subfolders** if needed, preview the batch, then run it. Relay processes the files one at a time, skips the configured archive folder, and records each file as its own run. Pause watching before starting the batch.
+
 For an AI demonstration, configure an installed Ollama model or a cloud API key in **AI connections**, then use **Document digest** with a text-based PDF and a separate output folder. Preview intentionally skips AI. A real run produces a Markdown summary. Cloud runs transmit extracted text to the chosen provider.
 
 For a failure demonstration, process a file whose target name already exists. Relay stops with a collision error and preserves both files. This illustrates failure handling rather than a simulated success state.

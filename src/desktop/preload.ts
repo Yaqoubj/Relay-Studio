@@ -7,6 +7,8 @@ const api: StudioAPI = {
   chooseFolder: () => ipcRenderer.invoke('studio:folder'),
   chooseFile: () => ipcRenderer.invoke('studio:file'),
   execute: (id, source, preview) => ipcRenderer.invoke('studio:execute', id, source, preview),
+  executeFolder: (id, folder, recursive, preview) =>
+    ipcRenderer.invoke('studio:execute-folder', id, folder, recursive, preview),
   cancel: () => ipcRenderer.invoke('studio:cancel'),
   watch: (id, enabled) => ipcRenderer.invoke('studio:watch', id, enabled),
   undo: (id) => ipcRenderer.invoke('studio:undo', id),

@@ -7,6 +7,7 @@ import type { FSWatcher } from 'chokidar';
 import { Store } from './database';
 import { RelayCloudClient, type CloudSession } from './cloud';
 import { execute, undoRun } from './engine';
+import { collectFiles } from './batch';
 import { validateRunnable, validateWorkflow } from './validation';
 import { transform, validateEndpoint } from './ai';
 import type { AISettings, CloudSettings, Run, Workflow } from '../shared/types';
@@ -374,6 +375,68 @@ else {
       if (watchers.has(id)) throw new Error('Pause watching before a manual run.');
       return startRun(store.workflow(id), source, preview, 'manual');
     });
+    handle(
+      'execute-folder',
+      async (id: string, folder: string, recursive: boolean, preview: boolean) => {
+        idle();
+        if (
+          typeof folder !== 'string' ||
+          typeof recursive !== 'boolean' ||
+          typeof preview !== 'boolean'
+        )
+          throw new Error('Invalid folder run.');
+        if (watchers.size)
+          throw new Error('Pause all watchers before processing an existing folder.');
+        const workflow = store.workflow(id);
+        validateRunnable(workflow);
+        const controller = new AbortController();
+        active = controller;
+        update();
+        try {
+          await allowFolder(folder);
+          const destinations = workflow.nodes
+            .filter((n) => ['copy', 'move', 'write'].includes(n.data.kind))
+            .map((n) => n.data.config.folder);
+          for (const destination of destinations) await allowFolder(destination);
+          const sources = await collectFiles(folder, recursive, destinations);
+          if (!sources.length) throw new Error('No files found in this folder.');
+          let completed = 0;
+          let last: Run | undefined;
+          for (const source of sources) {
+            if (controller.signal.aborted) break;
+            last = await execute(workflow, source, preview, 'manual', {
+              signal: controller.signal,
+              allowFolder,
+              update: (r) => {
+                store.putRun(r);
+                update();
+              },
+              ai: (text, config, signal) => transform(settings(), apiKey(), text, config, signal),
+              notify,
+            });
+            completed++;
+            const client = cloud();
+            if (client) {
+              try {
+                await client.recordRun(cloudConfig().workspaceId!, last);
+              } catch (error) {
+                notify(`Cloud sync skipped: ${(error as Error).message}`);
+              }
+            }
+            // A failure may have partial effects: stop for inspection rather than multiply it.
+            if (last.status !== 'success') break;
+          }
+          return { completed, total: sources.length, last };
+        } finally {
+          active = null;
+          update();
+          if (closeAfterRun) {
+            closeAfterRun = false;
+            win.close();
+          }
+        }
+      },
+    );
     handle('cancel', () => {
       active?.abort(new Error('Cancelled by user.'));
     });

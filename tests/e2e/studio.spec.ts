@@ -2,6 +2,57 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+test('organize existing folder previews and processes nested files', async () => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'relay-batch-ui-'));
+  const input = path.join(temp, 'inbox');
+  const output = path.join(temp, 'archive');
+  await fs.mkdir(path.join(input, 'nested'), { recursive: true });
+  await fs.mkdir(output);
+  await fs.writeFile(path.join(input, 'first.pdf'), 'first');
+  await fs.writeFile(path.join(input, 'nested', 'second.pdf'), 'second');
+  const app = await electron.launch({
+    args: ['.'],
+    env: { ...process.env, RELAY_DATA_DIR: path.join(temp, 'data') },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.getByLabel('Workflow name').waitFor();
+    await app.evaluate(({ dialog }, folder) => {
+      dialog.showOpenDialog = (async () => ({
+        canceled: false,
+        filePaths: [folder],
+      })) as typeof dialog.showOpenDialog;
+    }, output);
+    await page.evaluate(async () => {
+      const folder = await window.studio.chooseFolder();
+      const w = (await window.studio.snapshot()).workflows.find((w) => w.id === 'download-sorter')!;
+      w.nodes.find((n) => n.data.kind === 'move')!.data.config.folder = folder!;
+      await window.studio.save(w);
+    });
+    await page.getByRole('button', { name: 'Download organizer', exact: true }).click();
+    await app.evaluate(({ dialog }, folder) => {
+      dialog.showOpenDialog = (async () => ({
+        canceled: false,
+        filePaths: [folder],
+      })) as typeof dialog.showOpenDialog;
+    }, input);
+    await page.getByRole('button', { name: 'Organize existing folder' }).click();
+    await page.getByRole('button', { name: /Choose an existing folder/ }).click();
+    await page.getByRole('checkbox', { name: /Include files inside subfolders/ }).check();
+    await page.getByRole('button', { name: 'Preview workflow', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Previewed 2 of 2 files');
+    expect(await fs.readdir(output)).toEqual([]);
+    await page.getByRole('button', { name: 'Organize existing folder' }).click();
+    await page.getByRole('button', { name: 'Run workflow', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Processed 2 of 2 files');
+    expect((await fs.readdir(output)).length).toBe(2);
+    expect(await fs.readdir(path.join(input, 'nested'))).toEqual([]);
+    expect((await page.evaluate(() => window.studio.snapshot())).runs.length).toBe(4);
+  } finally {
+    await app.close();
+    await fs.rm(temp, { recursive: true, force: true });
+  }
+});
 test('create and connect steps, export a portable recipe, and import it', async () => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'relay-editor-'));
   const exported = path.join(temp, 'recipe.json');

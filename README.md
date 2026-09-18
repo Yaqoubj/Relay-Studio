@@ -34,6 +34,7 @@ This is a working Electron application, not a workflow mockup. It watches real f
 
 - **Visual workflow editor** — build flows from connected trigger, logic, file, AI, and notification blocks.
 - **Folder automation** — react to new files after they finish copying, with a bounded sequential queue.
+- **Existing-folder batches** — preview and organize files already in a folder, optionally including subfolders, with one history entry per file.
 - **Safe file actions** — copy, move, rename, and write without silently overwriting existing files.
 - **Preview before execution** — inspect deterministic steps without writes, notifications, or AI calls.
 - **Execution history** — see the input, output, timing, status, and recorded file effects for every step.
@@ -64,6 +65,8 @@ The fastest useful test is the included **Download organizer**:
 3. Pick one PDF and run **Preview** to inspect the planned route.
 4. Run it for real. Relay moves the file, adds today’s date, and records the execution.
 5. Use **Undo files** to restore it while the file is still unchanged.
+
+For files already sitting in a folder, choose **Organize existing folder**, select the folder, optionally include subfolders, preview the batch, and run it. Relay processes files sequentially, excludes configured output folders, and records each file separately.
 
 Three editable workflows ship with the app:
 

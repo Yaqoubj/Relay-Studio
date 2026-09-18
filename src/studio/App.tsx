@@ -217,6 +217,9 @@ export function App() {
   const [file, setFile] = useState(''),
     [running, setRunning] = useState(false),
     [runId, setRunId] = useState<string | null>(null);
+  const [folderMode, setFolderMode] = useState(false);
+  const [batchFolder, setBatchFolder] = useState('');
+  const [includeSubfolders, setIncludeSubfolders] = useState(false);
   const [showRun, setShowRun] = useState(false),
     [search, setSearch] = useState('');
   const refresh = useCallback(async () => {
@@ -338,13 +341,21 @@ export function App() {
     setSelected(null);
   }
   async function run(preview: boolean) {
-    if (!file) return;
+    if (folderMode ? !batchFolder : !file) return;
     const w = dirty ? await save() : workflow!;
     setRunning(true);
     setRunModal(false);
     setShowRun(true);
     setRunId(null);
     try {
+      if (folderMode) {
+        const batch = await api.executeFolder(w.id, batchFolder, includeSubfolders, preview);
+        setRunId(batch.last?.id || null);
+        setToast(
+          `${preview ? 'Previewed' : 'Processed'} ${batch.completed} of ${batch.total} files. ${batch.last?.status === 'failed' ? 'Stopped on an error; inspect Run history.' : 'See Run history for each file.'}`,
+        );
+        return;
+      }
       const result = await api.execute(w.id, file, preview);
       setRunId(result.id);
       if (!preview && result.steps.some((s) => s.effect?.type === 'move')) setFile('');
@@ -586,6 +597,15 @@ export function App() {
                 >
                   <Play size={15} />
                   Test workflow
+                </Button>
+                <Button
+                  disabled={busy || watching}
+                  onClick={() => {
+                    setFolderMode(true);
+                    setRunModal(true);
+                  }}
+                >
+                  <Folder size={15} /> Organize existing folder
                 </Button>
               </div>
             </header>
@@ -1299,29 +1319,67 @@ export function App() {
             <div className="modal-heading">
               <div>
                 <span className="page-eyebrow">TRY IT ON ONE FILE</span>
-                <h2>See your workflow in action.</h2>
+                <h2>
+                  {folderMode
+                    ? 'Process files already in a folder.'
+                    : 'See your workflow in action.'}
+                </h2>
               </div>
               <button onClick={() => setRunModal(false)} aria-label="Close">
                 <X size={19} />
               </button>
             </div>
             <p className="muted">
-              Choose a sample file. Start with a preview to inspect the plan, then run when you’re
-              ready.
+              {folderMode
+                ? 'Apply this workflow to existing files, one at a time. Output folders are excluded. Stops at the first error; each file appears in Run history.'
+                : 'Choose a sample file. Start with a preview to inspect the plan, then run when you’re ready.'}
             </p>
+            <div className="connection-actions">
+              <Button onClick={() => setFolderMode(false)} disabled={busy}>
+                One file
+              </Button>
+              <Button onClick={() => setFolderMode(true)} disabled={busy}>
+                Existing folder
+              </Button>
+            </div>
             <button
               className="sample-picker"
               onClick={() =>
                 void attempt(async () => {
-                  const chosen = await api.chooseFile();
-                  if (chosen) setFile(chosen);
+                  const chosen = folderMode ? await api.chooseFolder() : await api.chooseFile();
+                  if (chosen) {
+                    if (folderMode) setBatchFolder(chosen);
+                    else setFile(chosen);
+                  }
                 })
               }
             >
               <FileText size={27} />
-              <strong>{file ? shortPath(file) : 'Choose a sample file'}</strong>
-              <span>{file || 'Text files, documents, and more'}</span>
+              <strong>
+                {folderMode
+                  ? batchFolder
+                    ? shortPath(batchFolder)
+                    : 'Choose an existing folder'
+                  : file
+                    ? shortPath(file)
+                    : 'Choose a sample file'}
+              </strong>
+              <span>
+                {folderMode
+                  ? batchFolder || 'Files are processed using the current workflow'
+                  : file || 'Text files, documents, and more'}
+              </span>
             </button>
+            {folderMode && (
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={includeSubfolders}
+                  onChange={(e) => setIncludeSubfolders(e.target.checked)}
+                />
+                <span>Include files inside subfolders. Folder containers are left in place.</span>
+              </label>
+            )}
             <div className="run-options">
               <div>
                 <ShieldCheck size={20} />
@@ -1330,7 +1388,10 @@ export function App() {
                   Read the file and inspect the plan. No file changes, notifications, or AI
                   requests.
                 </p>
-                <Button disabled={!file || busy} onClick={() => void attempt(() => run(true))}>
+                <Button
+                  disabled={!(folderMode ? batchFolder : file) || busy}
+                  onClick={() => void attempt(() => run(true))}
+                >
                   <Play size={14} />
                   Preview workflow
                 </Button>
@@ -1347,7 +1408,7 @@ export function App() {
                 </p>
                 <Button
                   className="primary"
-                  disabled={!file || busy}
+                  disabled={!(folderMode ? batchFolder : file) || busy}
                   onClick={() => void attempt(() => run(false))}
                 >
                   <Play size={14} />

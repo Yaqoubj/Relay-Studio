@@ -14,11 +14,12 @@ flowchart LR
   Engine --> AI[Ollama or HTTPS cloud adapter]
   Engine --> DB[(Local SQLite journal)]
   Watch[Folder watcher + bounded queue] --> Engine
+  Batch[Existing-folder collector + bounded batch] --> Engine
   Engine -. optional sync .-> API[Relay Cloud API]
   API --> CloudDB[(Cloud SQLite in dev)]
 ```
 
-The renderer has no Node.js or filesystem access. IPC verifies the sending frame and its local page URL. Native folder pickers create persistent canonical-folder grants. Manual input files require a file-picker grant for the current session. Imported recipes have all folder fields reset. Exported recipes omit folder paths and never contain connection credentials. The optional API owns accounts, workspaces, synced workflows, share links, and compact run summaries; local file paths and document content stay on the desktop unless a future explicit upload step is added.
+The renderer has no Node.js or filesystem access. IPC verifies the sending frame and its local page URL. Native folder pickers create persistent canonical-folder grants. Manual input files require a file-picker grant for the current session. Imported recipes have all folder fields reset. Exported recipes omit folder paths and never contain connection credentials. The optional API owns accounts, workspaces, synced workflows, share links, and compact run summaries. The desktop client sends workflow definitions to the API; those definitions can include configured folder path strings. It sends run source names rather than full source paths, and it does not upload file contents or AI keys.
 
 The Content Security Policy blocks renderer network access, remote scripts, frames, and embedded objects. All AI networking happens in the main process. Navigation and new windows are blocked.
 
@@ -27,6 +28,14 @@ The Content Security Policy blocks renderer network access, remote scripts, fram
 Each workflow has one trigger and at most 40 steps. A normal output has one successor; conditions have separate Yes and No outputs. An unconnected condition output ends that path successfully. Cycles, joins, duplicate IDs, and multiple successors on the same output are rejected. Drafts may contain disconnected steps, but execution requires every step to be reachable from the trigger.
 
 One run executes at a time. Each run captures the workflow version, source path, mode, timestamps, per-step input/output, duration, and file effects. Edits do not rewrite history. The UI reads snapshots and receives update events through IPC. Cancel aborts an AI request or stops before the next step; file operations already in progress finish.
+
+## Existing files and batches
+
+The editor can process files already present in a selected folder through **Organize existing folder**. The desktop process collects the input list before execution, skips symbolic links, excludes configured output folders, optionally walks subfolders, and caps a batch at 1,000 files. It processes files sequentially through the same engine used by a manual run, so every file receives its own run record and supported effects can be undone individually.
+
+The batch pauses if a file fails or the user cancels. This prevents a collision or configuration mistake from multiplying across the rest of the folder. Folder containers are never moved by the collector; only the workflow's file actions decide where each file goes. A preview still performs no writes, notifications, or AI requests. The list is collected before the first file runs, so newly created output cannot be picked up by the same batch.
+
+All watchers must be paused before a batch starts. Existing-folder processing is a desktop feature and does not make the optional API a remote execution worker.
 
 ## Preview
 

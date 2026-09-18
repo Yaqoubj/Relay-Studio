@@ -84,6 +84,12 @@ export interface StudioAPI {
   chooseFolder(): Promise<string | null>;
   chooseFile(): Promise<string | null>;
   execute(id: string, source: string, preview: boolean): Promise<Run>;
+  executeFolder(
+    id: string,
+    folder: string,
+    recursive: boolean,
+    preview: boolean,
+  ): Promise<{ completed: number; total: number; last?: Run }>;
   cancel(): Promise<void>;
   watch(id: string, enabled: boolean): Promise<void>;
   undo(id: string): Promise<void>;
