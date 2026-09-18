@@ -1,14 +1,12 @@
 # Relay Studio
 
-<p align="center"><img src="assets/relay.png" width="76" alt="Relay Studio logo" /></p>
+<p align="center"><img src="assets/relay.svg" width="76" alt="Relay Studio logo" /></p>
 <p align="center">A small desktop app for turning repetitive file work into visual workflows.</p>
 <p align="center"><a href="https://github.com/Yaqoubj/Relay-Studio/releases">Download</a> · <a href="docs/demo.md">Demo</a> · <a href="docs/architecture.md">Architecture</a></p>
 
 ![Relay Studio workflow editor](docs/studio.png)
 
-I started this because I kept seeing the same desktop task: wait for a file, check what it is, rename it, move it, and maybe pull some information out of it. I wanted something easier to understand than another script, but much smaller than a full automation platform.
-
-Relay Studio lets you build that process with connected blocks. It runs locally as an Electron app. There is no account, backend, or required AI service.
+Relay Studio turns repetitive desktop file work into connected blocks. It runs locally as an Electron app. There is no account, backend, or required AI service.
 
 ## What it can do
 
@@ -82,11 +80,7 @@ This is a portfolio project, not a finished automation product. It currently doe
 
 Watching starts paused after a restart. Undo only covers unchanged file operations. A crash between a filesystem change and its history entry can still leave work that needs manual inspection. Run history stores paths and short document excerpts locally in plain text. The installer is unsigned.
 
-Those limits are intentional for now. I wanted the core workflow, preview, safety checks, and execution history to work before adding more integrations.
-
-## Project history
-
-This repository started as OverlayAI, a floating wrapper around AI websites. I changed the direction because that idea did not say much about my engineering or product thinking. Relay Studio is the replacement. The old source is still under `src/main`, `src/renderer`, and `native` for reference, but it is not part of the Relay Studio build.
+These limits keep the first version focused on the workflow editor, execution engine, previews, safety checks, and history.
 
 ## License
 

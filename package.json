@@ -24,7 +24,7 @@
       "package.json"
     ],
     "win": {
-      "icon": "assets/relay.ico",
+      "icon": "assets/relay.svg",
       "target": [
         "nsis"
       ],
