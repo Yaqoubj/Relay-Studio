@@ -65,7 +65,17 @@ $env:RELAY_API_SECRET = 'use-a-random-value-at-least-32-characters-long'
 npm run server
 ```
 
-The default address is `http://127.0.0.1:4317`. Set `RELAY_API_DATA` to choose the data folder. PostgreSQL, Redis-backed jobs, hosted authentication, and HTTPS belong in deployment; the SQLite adapter keeps local development simple and inspectable.
+The default address is `http://127.0.0.1:4317`. In the desktop app, open **Cloud workspace** and enter that address to use the API on this computer. For another computer or a public deployment, use an HTTPS URL. Remote HTTP URLs are rejected by the desktop client.
+
+You can run the same API in Docker:
+
+```sh
+RELAY_API_SECRET=use-a-random-value-at-least-32-characters-long docker compose up -d --build
+```
+
+In PowerShell, set it first with `$env:RELAY_API_SECRET = 'use-a-random-value-at-least-32-characters-long'` and then run `docker compose up -d --build`.
+
+The API data is kept in `./data`. Change the `RELAY_API_SECRET` value before sharing the service. PostgreSQL, Redis-backed jobs, hosted authentication, and HTTPS belong in a larger deployment; the SQLite adapter keeps this version simple and inspectable.
 
 ## Run from source
 
@@ -97,11 +107,11 @@ The [architecture notes](docs/architecture.md) explain the graph rules, preview 
 
 ## What is still missing
 
-This is a portfolio project, not a finished automation product. It currently does not have schedules, OCR, arbitrary scripts, spreadsheet integrations, cloud sync, team accounts, loops, parallel branches, or a background service that runs after the app closes.
+This is a portfolio project, not a finished automation product. It currently does not have schedules, OCR, arbitrary scripts, spreadsheet integrations, team accounts, loops, parallel branches, or a background service that runs after the app closes.
 
 Watching starts paused after a restart. Undo only covers unchanged file operations. A crash between a filesystem change and its history entry can still leave work that needs manual inspection. Run history stores paths and short document excerpts locally in plain text. The installer is unsigned.
 
-These limits keep the first version focused on the workflow editor, execution engine, previews, safety checks, and history. The backend does not yet run desktop file workflows remotely, send email, or provide a hosted production database.
+These limits keep the first version focused on the workflow editor, execution engine, previews, safety checks, local runs, and optional workspace sync. The backend does not run desktop file workflows remotely, send email, or provide a hosted production database.
 
 ## License
 

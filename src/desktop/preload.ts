@@ -14,6 +14,12 @@ const api: StudioAPI = {
   importWorkflow: () => ipcRenderer.invoke('studio:import'),
   settings: (s) => ipcRenderer.invoke('studio:settings', s),
   testAI: () => ipcRenderer.invoke('studio:test-ai'),
+  cloudSettings: () => ipcRenderer.invoke('studio:cloud-settings'),
+  cloudAuth: (input) => ipcRenderer.invoke('studio:cloud-auth', input),
+  cloudDisconnect: () => ipcRenderer.invoke('studio:cloud-disconnect'),
+  cloudPush: (id) => ipcRenderer.invoke('studio:cloud-push', id),
+  cloudPull: () => ipcRenderer.invoke('studio:cloud-pull'),
+  cloudShare: (id) => ipcRenderer.invoke('studio:cloud-share', id),
   onUpdate: (callback) => {
     const listener = () => callback();
     ipcRenderer.on('studio:update', listener);

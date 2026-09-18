@@ -1409,6 +1409,68 @@ button svg {
   color: #96889f;
   margin: 0;
 }
+.cloud-page .page-description {
+  max-width: 700px;
+}
+.cloud-card {
+  max-width: 850px;
+  background: #1b1c23;
+  border: 1px solid #38313f;
+  border-radius: 9px;
+  margin-top: 25px;
+  padding: 27px;
+}
+.cloud-card .muted {
+  margin: 8px 0 0;
+}
+.cloud-card .field {
+  max-width: 650px;
+}
+.cloud-fields {
+  display: flex;
+  gap: 15px;
+  max-width: 650px;
+}
+.cloud-fields .field {
+  flex: 1;
+}
+.cloud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 25px;
+}
+.connected-pill {
+  color: #8ee4ba;
+  border-color: #3f8061;
+}
+.cloud-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 26px;
+}
+.cloud-feature-grid > div {
+  padding: 16px;
+  background: #20212a;
+  border: 1px solid #353243;
+  border-radius: 7px;
+}
+.cloud-feature-grid svg {
+  color: #b99ce8;
+  margin-bottom: 13px;
+}
+.cloud-feature-grid strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+}
+.cloud-feature-grid p {
+  color: #96889f;
+  font-size: 10px;
+  line-height: 1.7;
+  margin: 8px 0 0;
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;

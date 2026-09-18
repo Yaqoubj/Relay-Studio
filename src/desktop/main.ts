@@ -5,17 +5,19 @@ import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import type { FSWatcher } from 'chokidar';
 import { Store } from './database';
+import { RelayCloudClient, type CloudSession } from './cloud';
 import { execute, undoRun } from './engine';
 import { validateRunnable, validateWorkflow } from './validation';
 import { transform, validateEndpoint } from './ai';
-import type { AISettings, Run, Workflow } from '../shared/types';
+import type { AISettings, CloudSettings, Run, Workflow } from '../shared/types';
 if (process.env.RELAY_DATA_DIR && !app.isPackaged)
   app.setPath('userData', process.env.RELAY_DATA_DIR);
 let win: BrowserWindow,
   store: Store,
   active: AbortController | null = null,
   quitting = false,
-  closeAfterRun = false;
+  closeAfterRun = false,
+  cloudClient: RelayCloudClient | null = null;
 const watchers = new Map<string, FSWatcher>();
 const queue: { workflow: Workflow; source: string }[] = [];
 const files = new Set<string>();
@@ -43,6 +45,57 @@ function apiKey() {
     throw new Error('The operating system credential store is unavailable.');
   return safeStorage.decryptString(Buffer.from(cipher, 'base64'));
 }
+function cloudConfig(): CloudSettings {
+  return {
+    baseUrl: 'http://127.0.0.1:4317',
+    email: '',
+    workspaceName: '',
+    workspaceId: '',
+    ...JSON.parse(store.get('cloud-settings') || '{}'),
+    connected: false,
+  };
+}
+function cloudToken() {
+  const cipher = store.get('cloud-token');
+  if (!cipher) return '';
+  if (!safeStorage.isEncryptionAvailable())
+    throw new Error('The operating system credential store is unavailable.');
+  return safeStorage.decryptString(Buffer.from(cipher, 'base64'));
+}
+function cloud() {
+  if (cloudClient) return cloudClient;
+  const config = cloudConfig();
+  const token = cloudToken();
+  if (!token || !config.workspaceId) return null;
+  cloudClient = new RelayCloudClient(config.baseUrl, token);
+  return cloudClient;
+}
+function cloudSnapshot(): CloudSettings {
+  const config = cloudConfig();
+  return {
+    ...config,
+    baseUrl: config.baseUrl || 'http://127.0.0.1:4317',
+    connected: !!(store.get('cloud-token') && config.workspaceId),
+  };
+}
+function saveCloudSession(baseUrl: string, session: CloudSession) {
+  if (
+    !safeStorage.isEncryptionAvailable() ||
+    (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')
+  )
+    throw new Error('Secure credential storage is unavailable on this system.');
+  store.set('cloud-token', safeStorage.encryptString(session.token).toString('base64'));
+  store.set(
+    'cloud-settings',
+    JSON.stringify({
+      baseUrl,
+      email: session.user.email,
+      workspaceId: session.workspace.id,
+      workspaceName: session.workspace.name,
+    }),
+  );
+  cloudClient = new RelayCloudClient(baseUrl, session.token);
+}
 function notify(message: string) {
   if (Notification.isSupported()) new Notification({ title: 'Relay Studio', body: message }).show();
 }
@@ -65,7 +118,7 @@ async function startRun(w: Workflow, source: string, preview: boolean, origin: R
   active = controller;
   update();
   try {
-    return await execute(w, source, preview, origin, {
+    const result = await execute(w, source, preview, origin, {
       signal: controller.signal,
       allowFolder,
       update: (r) => {
@@ -75,6 +128,15 @@ async function startRun(w: Workflow, source: string, preview: boolean, origin: R
       ai: (text, config, signal) => transform(settings(), apiKey(), text, config, signal),
       notify,
     });
+    const client = cloud();
+    if (client && result.status !== 'running') {
+      try {
+        await client.recordRun(cloudConfig().workspaceId!, result);
+      } catch (error) {
+        notify(`Cloud sync skipped: ${(error as Error).message}`);
+      }
+    }
+    return result;
   } finally {
     active = null;
     update();
@@ -263,6 +325,7 @@ else {
       runs: store.runs(),
       watching: [...watchers.keys()],
       settings: settings(),
+      cloud: cloudSnapshot(),
       busy: !!active,
     }));
     handle('save', async (w: Workflow) => {
@@ -407,6 +470,70 @@ else {
         prompt: 'Reply with OK.',
         format: 'text',
       });
+    });
+    handle('cloud-settings', () => cloudSnapshot());
+    handle(
+      'cloud-auth',
+      async (input: {
+        mode: 'login' | 'register';
+        baseUrl: string;
+        email: string;
+        password: string;
+      }) => {
+        idle();
+        if (!input || !['login', 'register'].includes(input.mode))
+          throw new Error('Choose sign in or register.');
+        if (
+          typeof input.baseUrl !== 'string' ||
+          typeof input.email !== 'string' ||
+          typeof input.password !== 'string'
+        )
+          throw new Error('Complete the cloud connection fields.');
+        const baseUrl = input.baseUrl.trim().replace(/\/+$/, '');
+        if (!baseUrl) throw new Error('Enter a Relay API URL.');
+        const client = new RelayCloudClient(baseUrl);
+        const session =
+          input.mode === 'register'
+            ? await client.register(input.email.trim(), input.password)
+            : await client.login(input.email.trim(), input.password);
+        saveCloudSession(baseUrl, session);
+        update();
+        return cloudSnapshot();
+      },
+    );
+    handle('cloud-disconnect', () => {
+      idle();
+      const config = cloudConfig();
+      store.set('cloud-token', '');
+      store.set('cloud-settings', JSON.stringify({ baseUrl: config.baseUrl }));
+      cloudClient = null;
+      update();
+    });
+    handle('cloud-push', async (id: string) => {
+      idle();
+      const client = cloud();
+      if (!client) throw new Error('Connect a Relay workspace first.');
+      const config = cloudConfig();
+      await client.saveWorkflow(config.workspaceId!, store.workflow(id));
+      update();
+    });
+    handle('cloud-pull', async () => {
+      idle();
+      const client = cloud();
+      if (!client) throw new Error('Connect a Relay workspace first.');
+      const config = cloudConfig();
+      const entries = await client.workflows(config.workspaceId!);
+      for (const entry of entries) store.save(entry.workflow);
+      update();
+      return store.workflows();
+    });
+    handle('cloud-share', async (id: string) => {
+      idle();
+      const client = cloud();
+      if (!client) throw new Error('Connect a Relay workspace first.');
+      const config = cloudConfig();
+      const shared = await client.shareWorkflow(config.workspaceId!, id);
+      return `${config.baseUrl}/api/shared/${shared.token}`;
     });
   });
   app.on('window-all-closed', () => app.quit());

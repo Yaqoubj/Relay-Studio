@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Cloud,
   Clock3,
   Copy,
   FileInput,
@@ -57,7 +58,15 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import type { AISettings, Kind, Run, Snapshot, Step, Workflow } from '../shared/types';
+import type {
+  AISettings,
+  CloudSettings,
+  Kind,
+  Run,
+  Snapshot,
+  Step,
+  Workflow,
+} from '../shared/types';
 import { blankWorkflow, catalog, templates } from '../shared/catalog';
 const icons = {
   trigger: FolderInput,
@@ -163,7 +172,9 @@ function shortPath(value: string) {
 export function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
-  const [page, setPage] = useState<'editor' | 'templates' | 'history' | 'connections'>('editor');
+  const [page, setPage] = useState<'editor' | 'templates' | 'history' | 'connections' | 'cloud'>(
+    'editor',
+  );
   const [selected, setSelected] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false),
     [toast, setToast] = useState('');
@@ -309,6 +320,46 @@ export function App() {
       await refresh();
     }
   }
+  async function cloudAuth(input: {
+    mode: 'login' | 'register';
+    baseUrl: string;
+    email: string;
+    password: string;
+  }) {
+    await attempt(async () => {
+      const connected = await api.cloudAuth(input);
+      await refresh();
+      setToast(`Connected to ${connected.workspaceName || 'Relay workspace'}.`);
+    });
+  }
+  async function cloudPush() {
+    await attempt(async () => {
+      const current = dirty ? await save() : workflow;
+      if (!current) throw new Error('Select a workflow first.');
+      await api.cloudPush(current.id);
+      setToast('Workflow synced to the cloud workspace.');
+    });
+  }
+  async function cloudPull() {
+    await attempt(async () => {
+      const workflows = await api.cloudPull();
+      if (workflows.length) load(workflows[0]);
+      await refresh();
+      setToast(
+        workflows.length
+          ? `Pulled ${workflows.length} workflow${workflows.length === 1 ? '' : 's'} from the cloud.`
+          : 'The cloud workspace has no workflows yet.',
+      );
+    });
+  }
+  async function cloudShare() {
+    await attempt(async () => {
+      const current = dirty ? await save() : workflow;
+      if (!current) throw new Error('Select a workflow first.');
+      const url = await api.cloudShare(current.id);
+      setToast(`Share link: ${url}`);
+    });
+  }
   const node = workflow?.nodes.find((n) => n.id === selected);
   const watching = !!workflow && !!snapshot?.watching.includes(workflow.id);
   const relevantRuns = snapshot?.runs.filter((r) => r.workflowId === workflow?.id) || [];
@@ -370,6 +421,13 @@ export function App() {
         >
           <Sparkles size={17} />
           AI connections
+        </button>
+        <button
+          className={`nav-item ${page === 'cloud' ? 'active' : ''}`}
+          onClick={() => setPage('cloud')}
+        >
+          <Cloud size={17} />
+          Cloud workspace
         </button>
         <div className="nav-label flows-heading">
           YOUR WORKFLOWS
@@ -439,9 +497,11 @@ export function App() {
                 ? 'Workflows'
                 : page === 'connections'
                   ? 'AI connections'
-                  : page === 'history'
-                    ? 'Run history'
-                    : 'Templates'}
+                  : page === 'cloud'
+                    ? 'Cloud workspace'
+                    : page === 'history'
+                      ? 'Run history'
+                      : 'Templates'}
             </strong>
           </div>
           <div className="top-status">
@@ -1145,6 +1205,23 @@ export function App() {
             }
           />
         )}
+        {page === 'cloud' && (
+          <CloudWorkspace
+            cloud={snapshot.cloud}
+            busy={busy}
+            onAuth={cloudAuth}
+            onDisconnect={() =>
+              attempt(async () => {
+                await api.cloudDisconnect();
+                await refresh();
+                setToast('Disconnected from the cloud workspace.');
+              })
+            }
+            onPush={cloudPush}
+            onPull={cloudPull}
+            onShare={cloudShare}
+          />
+        )}
       </div>
       {palette && (
         <div className="modal-backdrop" onClick={() => setPalette(false)}>
@@ -1596,6 +1673,170 @@ function Connections({
           <p>
             Preview never calls AI. Real AI steps receive extracted text and your instructions. The
             model cannot execute commands; only your connected action blocks can change files.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+function CloudWorkspace({
+  cloud,
+  busy,
+  onAuth,
+  onDisconnect,
+  onPush,
+  onPull,
+  onShare,
+}: {
+  cloud: CloudSettings;
+  busy: boolean;
+  onAuth: (input: {
+    mode: 'login' | 'register';
+    baseUrl: string;
+    email: string;
+    password: string;
+  }) => Promise<void>;
+  onDisconnect: () => Promise<void>;
+  onPush: () => Promise<void>;
+  onPull: () => Promise<void>;
+  onShare: () => Promise<void>;
+}) {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [baseUrl, setBaseUrl] = useState(cloud.baseUrl || 'http://127.0.0.1:4317');
+  const [email, setEmail] = useState(cloud.email || '');
+  const [password, setPassword] = useState('');
+  const [working, setWorking] = useState(false);
+  useEffect(() => {
+    setBaseUrl(cloud.baseUrl || 'http://127.0.0.1:4317');
+    setEmail(cloud.email || '');
+  }, [cloud.baseUrl, cloud.email]);
+  async function submit() {
+    setWorking(true);
+    try {
+      await onAuth({ mode, baseUrl, email, password });
+      setPassword('');
+    } finally {
+      setWorking(false);
+    }
+  }
+  return (
+    <div className="page-content cloud-page">
+      <div className="page-eyebrow">SYNC, SHARE, AND RUN HISTORY</div>
+      <h1>Choose where your workspace lives.</h1>
+      <p className="page-description">
+        Workflows still run on this computer. This connection only adds accounts, syncing, sharing,
+        and cloud run history.
+      </p>
+      {!cloud.connected ? (
+        <div className="cloud-card">
+          <div className="section-heading">
+            <div>
+              <h2>Connect a Relay workspace</h2>
+              <p className="muted">
+                Use Relay Cloud, your own hosted API, or a Relay API running on this machine.
+              </p>
+            </div>
+            <span className="pill">NOT CONNECTED</span>
+          </div>
+          <Field
+            label="Relay API URL"
+            hint="Example: https://relay.example.com or http://127.0.0.1:4317"
+          >
+            <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+          </Field>
+          <div className="cloud-fields">
+            <Field label="Email">
+              <input
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </Field>
+            <Field label="Password">
+              <input
+                type="password"
+                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="cloud-actions">
+            <Button
+              className="primary"
+              disabled={busy || working || !email || !password}
+              onClick={() => void submit()}
+            >
+              {working ? <LoaderCircle className="spin" size={14} /> : <Cloud size={14} />}
+              {mode === 'login' ? 'Sign in' : 'Create account'}
+            </Button>
+            <Button
+              disabled={busy || working}
+              onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+            >
+              {mode === 'login' ? 'Need an account?' : 'Already have an account?'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="cloud-card cloud-connected">
+          <div className="section-heading">
+            <div>
+              <h2>{cloud.workspaceName || 'Relay workspace'}</h2>
+              <p className="muted">
+                {cloud.email} · {cloud.baseUrl}
+              </p>
+            </div>
+            <span className="pill connected-pill">CONNECTED</span>
+          </div>
+          <div className="cloud-feature-grid">
+            <div>
+              <Cloud size={18} />
+              <strong>Sync workflows</strong>
+              <p>Push this workflow or pull the workspace onto another desktop.</p>
+            </div>
+            <div>
+              <WorkflowIcon size={18} />
+              <strong>Share workflows</strong>
+              <p>Create a read-only link for a teammate or reviewer.</p>
+            </div>
+            <div>
+              <Activity size={18} />
+              <strong>Run history</strong>
+              <p>Completed local runs are recorded in this workspace.</p>
+            </div>
+          </div>
+          <div className="cloud-actions">
+            <Button className="primary" disabled={busy || working} onClick={() => void onPush()}>
+              <Upload size={14} />
+              Sync current workflow
+            </Button>
+            <Button disabled={busy || working} onClick={() => void onPull()}>
+              <ArrowDownToLine size={14} />
+              Pull workflows
+            </Button>
+            <Button disabled={busy || working} onClick={() => void onShare()}>
+              <Copy size={14} />
+              Create share link
+            </Button>
+            <Button
+              className="danger"
+              disabled={busy || working}
+              onClick={() => void onDisconnect()}
+            >
+              Disconnect
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className="privacy-note">
+        <ShieldCheck size={21} />
+        <div>
+          <h3>Local first</h3>
+          <p>
+            File access and workflow runs stay local. Only account data, workflow definitions, and
+            run summaries are sent to the API you choose.
           </p>
         </div>
       </div>

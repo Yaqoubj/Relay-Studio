@@ -68,6 +68,14 @@ export type Snapshot = {
   watching: string[];
   settings: AISettings;
   busy: boolean;
+  cloud: CloudSettings;
+};
+export type CloudSettings = {
+  baseUrl: string;
+  connected: boolean;
+  email?: string;
+  workspaceName?: string;
+  workspaceId?: string;
 };
 export interface StudioAPI {
   snapshot(): Promise<Snapshot>;
@@ -83,5 +91,16 @@ export interface StudioAPI {
   importWorkflow(): Promise<Workflow | null>;
   settings(settings: AISettings & { apiKey?: string }): Promise<AISettings>;
   testAI(): Promise<string>;
+  cloudSettings(): Promise<CloudSettings>;
+  cloudAuth(input: {
+    mode: 'login' | 'register';
+    baseUrl: string;
+    email: string;
+    password: string;
+  }): Promise<CloudSettings>;
+  cloudDisconnect(): Promise<void>;
+  cloudPush(workflowId: string): Promise<void>;
+  cloudPull(): Promise<Workflow[]>;
+  cloudShare(workflowId: string): Promise<string>;
   onUpdate(callback: () => void): () => void;
 }

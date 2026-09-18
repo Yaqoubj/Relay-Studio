@@ -1,0 +1,13 @@
+services:
+  relay-api:
+    build: .
+    ports:
+      - '4317:4317'
+    environment:
+      RELAY_API_SECRET: ${RELAY_API_SECRET:?Set RELAY_API_SECRET before starting Relay API}
+      RELAY_API_HOST: 0.0.0.0
+      RELAY_API_PORT: 4317
+      RELAY_API_DATA: /data
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
