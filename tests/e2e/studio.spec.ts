@@ -165,6 +165,9 @@ test('desktop workflow: configure, preview, run, undo, watch, and persist', asyn
     await expect(page.locator('.template-card')).toHaveCount(3);
     await page.getByRole('button', { name: 'AI connections', exact: true }).click();
     await expect(page.getByText('Local model settings', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Cloud workspace', exact: true }).click();
+    await expect(page.getByText('Connect a Relay workspace', { exact: true })).toBeVisible();
+    await page.screenshot({ path: 'docs/cloud.png' });
     expect(errors).toEqual([]);
   } finally {
     await app.close();

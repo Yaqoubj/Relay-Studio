@@ -1,7 +1,7 @@
 {
   "name": "relay-studio",
   "version": "1.1.1",
-  "description": "Visual desktop automation for local files, documents, and optional AI",
+  "description": "Local-first visual automation for desktop files and optional AI",
   "main": "build/main.cjs",
   "author": "Yaqoubj",
   "license": "MIT",

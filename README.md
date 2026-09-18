@@ -1,118 +1,148 @@
-# Relay Studio
+<p align="center">
+  <img src="assets/relay.svg" width="96" alt="Relay Studio logo" />
+</p>
 
-<p align="center"><img src="assets/relay.svg" width="76" alt="Relay Studio logo" /></p>
-<p align="center">A small desktop app for turning repetitive file work into visual workflows.</p>
-<p align="center"><a href="https://github.com/Yaqoubj/Relay-Studio/releases">Download</a> · <a href="docs/demo.md">Demo</a> · <a href="docs/architecture.md">Architecture</a></p>
+<h1 align="center">Relay Studio</h1>
+
+<p align="center"><strong>Desktop automation for the files that keep landing in your folders.</strong></p>
+
+<p align="center">
+  Watch a folder, route the right files, rename them, extract text, ask AI, write the result, and keep a record of every run.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Yaqoubj/Relay-Studio/releases/latest"><img src="https://img.shields.io/github/v/release/Yaqoubj/Relay-Studio?style=flat-square&color=49dfbd" alt="Latest release" /></a>
+  <img src="https://img.shields.io/badge/platform-Windows-7aa2f7?style=flat-square" alt="Windows" />
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Yaqoubj/Relay-Studio?style=flat-square&color=b99ce8" alt="MIT license" /></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Yaqoubj/Relay-Studio/releases/latest"><strong>Download for Windows</strong></a>
+  · <a href="docs/demo.md">Run the five-minute demo</a>
+  · <a href="docs/architecture.md">Read the architecture</a>
+</p>
 
 ![Relay Studio workflow editor](docs/studio.png)
 
-Relay Studio turns repetitive desktop file work into connected blocks. File work runs locally in the desktop app. An optional Relay Cloud backend provides accounts, workspace sync, sharing, and run history.
+## Build it once. Let the folder handle the rest.
 
-## What it can do
+Relay Studio turns repetitive desktop file work into a visual workflow. Connect a trigger to conditions and actions, preview the route on one file, then run it manually or leave the folder watcher on.
 
-The included templates are:
+This is a working Electron application, not a workflow mockup. It watches real folders, performs guarded filesystem operations, records every step in SQLite, and can reverse supported file changes when the files are still untouched.
 
-- **Download organizer:** watch a folder, keep PDFs, move them to an archive, add today’s date, and show a notification.
-- **Document digest:** read a text-based PDF, ask AI for a summary, and save a Markdown file.
-- **Meeting follow-up:** read a transcript and create notes with decisions and action items.
+### What is already working
 
-You can edit the templates or build a workflow from scratch. The blocks handle folder triggers, conditions, reading text, AI transforms, copying, moving, renaming, writing files, and notifications.
+- **Visual workflow editor** — build flows from connected trigger, logic, file, AI, and notification blocks.
+- **Folder automation** — react to new files after they finish copying, with a bounded sequential queue.
+- **Safe file actions** — copy, move, rename, and write without silently overwriting existing files.
+- **Preview before execution** — inspect deterministic steps without writes, notifications, or AI calls.
+- **Execution history** — see the input, output, timing, status, and recorded file effects for every step.
+- **Guarded undo** — restore supported file changes only when Relay can verify that the files were not modified.
+- **Optional AI** — use local Ollama or an OpenAI-compatible HTTPS endpoint with your own model and key.
+- **Portable workflows** — import and export recipes without leaking local folder paths or credentials.
+- **Optional workspace sync** — connect to a local or self-hosted Relay API for accounts, workflow sync, share links, and run summaries.
 
-Before a real run, you can use **Preview**. It reads the sample file and shows the planned steps without changing files or calling AI. Real runs are recorded in the execution history, including each step’s output and timing. Supported file changes can be undone if the files have not been changed since the run.
+<table>
+  <tr>
+    <td width="50%"><img src="docs/history.png" alt="Relay Studio execution history" /></td>
+    <td width="50%"><img src="docs/cloud.png" alt="Relay Studio cloud workspace settings" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Every preview, manual run, and watched run is inspectable.</sub></td>
+    <td align="center"><sub>Use a local API or point Relay at your own HTTPS deployment.</sub></td>
+  </tr>
+</table>
 
-![Relay Studio run history](docs/history.png)
+## Start with a real workflow
 
-## Try it
+Download the current Windows installer from [Releases](https://github.com/Yaqoubj/Relay-Studio/releases/latest). The installer is unsigned, so Windows may show a SmartScreen warning.
 
-Download the Windows installer from the [Releases page](https://github.com/Yaqoubj/Relay-Studio/releases). It is unsigned, so Windows may show a warning.
+The fastest useful test is the included **Download organizer**:
 
-For the quickest test:
+1. Choose a folder to watch and a separate archive folder.
+2. Save the workflow and select **Test workflow**.
+3. Pick one PDF and run **Preview** to inspect the planned route.
+4. Run it for real. Relay moves the file, adds today’s date, and records the execution.
+5. Use **Undo files** to restore it while the file is still unchanged.
 
-1. Open **Download organizer**.
-2. Choose an input folder and an archive folder.
-3. Save the workflow.
-4. Click **Test workflow**, pick a sample PDF, and run Preview.
-5. Run it for real if the plan looks right.
+Three editable workflows ship with the app:
 
-Folder watching is off until you enable it. It only runs while Relay Studio is open.
+| Workflow               | What it demonstrates                               | AI required |
+| ---------------------- | -------------------------------------------------- | ----------- |
+| **Download organizer** | Filter PDFs, move them, add a date, and notify     | No          |
+| **Document digest**    | Read a text-based PDF and write a Markdown summary | Yes         |
+| **Meeting follow-up**  | Turn a transcript into decisions and action items  | Yes         |
 
-## AI setup
+Folder watching starts paused after every app restart and only runs while Relay Studio is open.
 
-AI is optional. The file-moving examples do not need it.
+## AI is a block, not the whole product
 
-For local AI, install [Ollama](https://ollama.com), download a model, and enter its name under **AI connections**. The default local address is `http://127.0.0.1:11434`.
+All file organization features work without an AI account.
 
-For cloud AI, enter an HTTPS endpoint, a model name, and your own API key. You also have to enable document processing before Relay sends extracted text to that provider. API usage is billed by the provider; a ChatGPT subscription does not automatically include API access.
+For private local processing, install [Ollama](https://ollama.com), download a model, and enter its exact name under **AI connections**. Relay only accepts loopback addresses for Ollama.
 
-AI steps can return normal text or named fields. Later steps can use values such as `{{ai.company}}`. If the response is not valid, the run stops instead of guessing. AI cannot execute shell commands; it only supplies text to the blocks you configured.
+For a cloud model, enter an OpenAI-compatible HTTPS base URL, model name, and your own API key. Cloud document processing stays disabled until you explicitly allow it. Keys are encrypted with the operating system credential store and never appear in workflow exports.
 
-## Relay Cloud backend
+AI can return normal text or named fields such as `{{ai.company}}`. It cannot execute commands or access the filesystem. Only the action blocks already connected in the workflow can change files.
 
-The backend lives in `src/server`. It is a Fastify API backed by SQLite for development. It currently provides:
+## Run the workspace API where you want
 
-- email/password accounts with scrypt password hashing and JWT sessions;
-- personal workspaces and member roles;
-- workflow save, update, list, and delete;
-- read-only workflow share links;
-- run summaries that keep local file contents out of the API by default.
+The optional API in [`src/server`](src/server) adds accounts, personal workspaces, workflow sync, read-only share links, and compact run summaries. Desktop file execution stays on the desktop; local files and AI keys are not uploaded.
 
-The desktop boundary is in `src/desktop/cloud.ts`. It sends workflow definitions and run summaries only. It does not upload local files or API keys.
-
-Run it locally:
+Run it directly:
 
 ```powershell
 $env:RELAY_API_SECRET = 'use-a-random-value-at-least-32-characters-long'
 npm run server
 ```
 
-The default address is `http://127.0.0.1:4317`. In the desktop app, open **Cloud workspace** and enter that address to use the API on this computer. For another computer or a public deployment, use an HTTPS URL. Remote HTTP URLs are rejected by the desktop client.
-
-You can run the same API in Docker:
+Or run the same API with Docker:
 
 ```sh
 RELAY_API_SECRET=use-a-random-value-at-least-32-characters-long docker compose up -d --build
 ```
 
-In PowerShell, set it first with `$env:RELAY_API_SECRET = 'use-a-random-value-at-least-32-characters-long'` and then run `docker compose up -d --build`.
+Connect the desktop app to `http://127.0.0.1:4317` for a local workspace. Remote endpoints must use HTTPS. API data is stored in `./data` by the included Docker Compose setup.
 
-The API data is kept in `./data`. Change the `RELAY_API_SECRET` value before sharing the service. PostgreSQL, Redis-backed jobs, hosted authentication, and HTTPS belong in a larger deployment; the SQLite adapter keeps this version simple and inspectable.
+## Under the hood
 
-## Run from source
+```text
+React + React Flow
+        ↓ sandboxed preload bridge
+Electron main process
+        ↓ validated workflow graph
+Sequential file engine ─── SQLite run journal
+        ├── local filesystem
+        ├── Ollama / HTTPS AI provider
+        └── optional Relay workspace API
+```
 
-You need Node.js 24+ and npm. Windows is the platform I have tested.
+The renderer has no Node.js or filesystem access. Folder and file access starts with a native picker grant. Imported workflows have their folder paths cleared. Existing destination files are never overwritten. The execution engine rejects loops, joins, duplicate outputs, traversal filenames, symbolic-link inputs, and unsafe cloud endpoints.
+
+The detailed failure model, watcher rules, preview semantics, and recovery limits are documented in [Architecture and tradeoffs](docs/architecture.md).
+
+## Develop locally
+
+Relay Studio currently targets Windows. You need Node.js 24+ and npm.
 
 ```sh
 npm ci
 npm start
 ```
 
-Useful commands:
-
 ```sh
-npm test                  # engine, storage, PDF, and AI adapter tests
-npm run test:e2e          # real Electron and filesystem tests
-npm run build             # type-check and build the app
-npm run dist:installer    # build the Windows installer
+npm test                  # engine, storage, API, PDF, and AI adapter tests
+npm run test:e2e          # real Electron and filesystem integration tests
+npm run build             # type-check and build the desktop app
+npm run dist:installer    # produce the Windows installer
 ```
 
-The tests use temporary folders and a controlled local AI server. They do not call a paid AI service.
+The test suite uses temporary folders and a controlled local AI server. It does not call a paid AI service.
 
-## How it is built
+## Current boundaries
 
-The interface is React and React Flow. The execution engine is TypeScript code in the Electron main process. Local SQLite stores workflows and run history. The optional Fastify API stores synced workflows, accounts, and cloud-visible run summaries. Chokidar watches folders. PDF text is extracted with `pdf-parse`.
-
-The renderer is sandboxed and only gets the specific capabilities exposed through the preload bridge. API keys are stored with the operating system credential store. Exported workflows do not include folder paths or credentials.
-
-The [architecture notes](docs/architecture.md) explain the graph rules, preview behavior, file safety checks, and recovery limits.
-
-## What is still missing
-
-This is a portfolio project, not a finished automation product. It currently does not have schedules, OCR, arbitrary scripts, spreadsheet integrations, team accounts, loops, parallel branches, or a background service that runs after the app closes.
-
-Watching starts paused after a restart. Undo only covers unchanged file operations. A crash between a filesystem change and its history entry can still leave work that needs manual inspection. Run history stores paths and short document excerpts locally in plain text. The installer is unsigned.
-
-These limits keep the first version focused on the workflow editor, execution engine, previews, safety checks, local runs, and optional workspace sync. The backend does not run desktop file workflows remotely, send email, or provide a hosted production database.
+Relay does not yet include schedules, OCR, spreadsheet integrations, arbitrary scripts, loops, parallel branches, team invitations, or a background Windows service. The workspace API uses SQLite and does not remotely execute desktop file workflows. A production-hosted service would also need HTTPS termination, managed authentication, a production database, and durable background jobs.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)
