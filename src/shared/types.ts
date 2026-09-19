@@ -78,6 +78,22 @@ export type CloudSettings = {
   workspaceId?: string;
 };
 export interface StudioAPI {
+  organizerState(): Promise<import('./organizer').OrganizerState>;
+  onOrganizerProgress(
+    callback: (progress: import('./organizer').OrganizerProgress | null) => void,
+  ): () => void;
+  organizerScan(options: import('./organizer').ScanOptions): Promise<void>;
+  organizerPlan(options: import('./organizer').PlanOptions): Promise<boolean>;
+  organizerSelect(ids: string[]): Promise<void>;
+  organizerApply(): Promise<void>;
+  organizerUndo(): Promise<void>;
+  organizerLoad(id: string): Promise<void>;
+  organizerSavePreset(
+    preset: Omit<import('./organizer').OrganizerPreset, 'id' | 'nextRun'> & { id?: string },
+  ): Promise<void>;
+  organizerRemovePreset(id: string): Promise<void>;
+  organizerRunPreset(id: string): Promise<void>;
+  organizerClearCache(): Promise<void>;
   snapshot(): Promise<Snapshot>;
   save(workflow: Workflow): Promise<Workflow>;
   remove(id: string): Promise<boolean>;

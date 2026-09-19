@@ -68,7 +68,7 @@ async function readDocument(file: string): Promise<string> {
       const result = await parser.getText();
       if (!result.text.trim())
         throw new Error(
-          'This PDF has no extractable text. Scanned PDFs need OCR, which is not included.',
+          'This PDF has no extractable text. The graph Read document step needs text; use a File organizer AI template with local OCR for scanned pages.',
         );
       return result.text;
     } finally {

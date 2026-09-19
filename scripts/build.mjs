@@ -6,7 +6,15 @@ await build({
   platform: 'node',
   format: 'cjs',
   target: 'node24',
-  external: ['electron', 'chokidar', 'pdf-parse'],
+  external: [
+    'electron',
+    'chokidar',
+    'pdf-parse',
+    'exifr',
+    'mammoth',
+    'tesseract.js',
+    '@tesseract.js-data/eng',
+  ],
 });
 await build({
   entryPoints: ['src/desktop/preload.ts'],

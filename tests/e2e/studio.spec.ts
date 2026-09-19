@@ -208,17 +208,17 @@ test('desktop workflow: configure, preview, run, undo, watch, and persist', asyn
     await page.getByRole('button', { name: 'Dismiss notification', exact: true }).click();
     await expect(page.locator('.react-flow__node').first()).toBeVisible();
     await page.getByRole('button', { name: 'Fit View', exact: true }).click();
-    await page.screenshot({ path: 'docs/studio.png' });
+    if (process.env.RELAY_UPDATE_SCREENSHOTS) await page.screenshot({ path: 'docs/studio.png' });
     await page.getByRole('button', { name: 'Run history', exact: true }).click();
     await expect(page.locator('.history-row:not(.heading)')).toHaveCount(3);
-    await page.screenshot({ path: 'docs/history.png' });
+    if (process.env.RELAY_UPDATE_SCREENSHOTS) await page.screenshot({ path: 'docs/history.png' });
     await page.getByRole('button', { name: 'Templates', exact: true }).click();
     await expect(page.locator('.template-card')).toHaveCount(3);
     await page.getByRole('button', { name: 'AI connections', exact: true }).click();
     await expect(page.getByText('Local model settings', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Cloud workspace', exact: true }).click();
     await expect(page.getByText('Connect a Relay workspace', { exact: true })).toBeVisible();
-    await page.screenshot({ path: 'docs/cloud.png' });
+    if (process.env.RELAY_UPDATE_SCREENSHOTS) await page.screenshot({ path: 'docs/cloud.png' });
     expect(errors).toEqual([]);
   } finally {
     await app.close();

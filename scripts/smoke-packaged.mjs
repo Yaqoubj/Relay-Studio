@@ -1,8 +1,14 @@
 import { _electron as electron } from '@playwright/test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import fs from 'node:fs/promises';
+import os from 'node:os';
 const executablePath = path.resolve(process.argv[2] || 'dist/win-unpacked/Relay Studio.exe');
-const app = await electron.launch({ executablePath });
+const data = await fs.mkdtemp(path.join(os.tmpdir(), 'relay-packaged-smoke-'));
+const app = await electron.launch({
+  executablePath,
+  env: { ...process.env, RELAY_DATA_DIR: data },
+});
 try {
   const page = await app.firstWindow();
   await page.getByLabel('Workflow name').waitFor();
@@ -31,14 +37,48 @@ try {
     pdf += `xref\n0 6\n0000000000 65535 f \n${offsets.map((n) => String(n).padStart(10, '0') + ' 00000 n ').join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
     const parser = new PDFParse({ data: Buffer.from(pdf) });
     try {
-      return { packaged: app.isPackaged, text: (await parser.getText()).text };
+      const text = (await parser.getText()).text;
+      const screenshot = (
+        await parser.getScreenshot({ first: 1, desiredWidth: 1800, imageDataUrl: false })
+      ).pages[0].data;
+      const { createWorker } = load('tesseract.js');
+      const { langPath } = load('@tesseract.js-data/eng');
+      let worker;
+      let timeout;
+      try {
+        const ocr = await Promise.race([
+          (async () => {
+            worker = await createWorker('eng', 1, { langPath, cacheMethod: 'none' });
+            return (await worker.recognize(Buffer.from(screenshot))).data.text;
+          })(),
+          new Promise((_, reject) => {
+            timeout = setTimeout(() => reject(new Error('Packaged OCR timed out.')), 45000);
+          }),
+        ]);
+        return {
+          packaged: app.isPackaged,
+          text,
+          ocr,
+          docx: typeof load('mammoth').extractRawText,
+          exif: typeof load('exifr').parse,
+        };
+      } finally {
+        clearTimeout(timeout);
+        if (worker) await worker.terminate();
+      }
     } finally {
       await parser.destroy();
     }
   });
   assert.equal(result.packaged, true);
   assert.match(result.text, /Packaged PDF works/);
-  console.log('Packaged application launches; SQLite workspace, renderer, and PDF parser work.');
+  assert.match(result.ocr, /Packaged PDF works/i);
+  assert.equal(result.docx, 'function');
+  assert.equal(result.exif, 'function');
+  console.log(
+    'Packaged application launches; SQLite, renderer, PDF rendering, offline OCR, DOCX and EXIF dependencies work.',
+  );
 } finally {
   await app.close();
+  await fs.rm(data, { recursive: true, force: true });
 }

@@ -68,6 +68,8 @@ import type {
   Workflow,
 } from '../shared/types';
 import { blankWorkflow, catalog, templates } from '../shared/catalog';
+import { Organizer, OrganizerCards } from './Organizer';
+import type { OrganizerTemplate } from '../shared/organizer';
 const icons = {
   trigger: FolderInput,
   filter: GitBranch,
@@ -205,9 +207,10 @@ function shortPath(value: string) {
 export function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
-  const [page, setPage] = useState<'editor' | 'templates' | 'history' | 'connections' | 'cloud'>(
-    'editor',
-  );
+  const [page, setPage] = useState<
+    'editor' | 'templates' | 'history' | 'connections' | 'cloud' | 'organizer'
+  >('editor');
+  const [organizerTemplate, setOrganizerTemplate] = useState<OrganizerTemplate>();
   const [selected, setSelected] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false),
     [toast, setToast] = useState('');
@@ -439,6 +442,16 @@ export function App() {
         </div>
         <div className="nav-label">BUILD & MANAGE</div>
         <button
+          className={`nav-item ${page === 'organizer' ? 'active' : ''}`}
+          onClick={() => {
+            setOrganizerTemplate(undefined);
+            setPage('organizer');
+          }}
+        >
+          <Folder size={17} />
+          File organizer
+        </button>
+        <button
           className={`nav-item ${page === 'editor' ? 'active' : ''}`}
           onClick={() => setPage('editor')}
         >
@@ -527,7 +540,7 @@ export function App() {
             <ArrowRight size={14} />
           </button>
           <div className="version">
-            RELAY STUDIO <span>v1.1.1</span>
+            RELAY STUDIO <span>v1.3.0</span>
           </div>
         </div>
       </aside>
@@ -537,15 +550,17 @@ export function App() {
             <span>Personal workspace</span>
             <ChevronRight size={13} />
             <strong>
-              {page === 'editor'
-                ? 'Workflows'
-                : page === 'connections'
-                  ? 'AI connections'
-                  : page === 'cloud'
-                    ? 'Cloud workspace'
-                    : page === 'history'
-                      ? 'Run history'
-                      : 'Templates'}
+              {page === 'organizer'
+                ? 'File organizer'
+                : page === 'editor'
+                  ? 'Workflows'
+                  : page === 'connections'
+                    ? 'AI connections'
+                    : page === 'cloud'
+                      ? 'Cloud workspace'
+                      : page === 'history'
+                        ? 'Run history'
+                        : 'Templates'}
             </strong>
           </div>
           <div className="top-status">
@@ -1076,60 +1091,86 @@ export function App() {
             </Button>
           </div>
         ) : null}
+        {page === 'organizer' && <Organizer initialTemplate={organizerTemplate} busy={busy} />}
         {page === 'templates' && (
           <div className="page-content">
-            <div className="page-eyebrow">LESS REPETITION. MORE ROOM TO THINK.</div>
-            <h1>Start with a little inspiration.</h1>
+            <div className="page-eyebrow">READY TO USE</div>
+            <h1>Pick a job for Relay.</h1>
             <p className="page-description">
-              Useful starting points. Make them work the way you do.
+              File tools work locally. AI templates use the model you connect.
             </p>
-            <div className="template-grid">
-              {templates().map((t, i) => (
-                <article className="template-card" key={t.id}>
-                  <div className={`template-art art-${i}`}>
-                    <span className="template-mini">
-                      <FolderInput />
-                    </span>
-                    <span className="dash-line" />
-                    <span className="template-mini accent">
-                      {i === 1 ? <Folder /> : <Sparkles />}
-                    </span>
-                    <span className="dash-line" />
-                    <span className="template-mini">
-                      <Check />
-                    </span>
-                  </div>
-                  <div className="template-content">
-                    <span className="pill">{i === 1 ? 'NO AI REQUIRED' : 'AI POWERED'}</span>
-                    <h2>{t.name}</h2>
-                    <p>{t.description}</p>
-                    <div>
-                      <span>{t.nodes.length} connected steps</span>
-                      <Button
-                        disabled={busy}
-                        onClick={() =>
-                          void attempt(async () => {
-                            if (dirty && !confirm('Discard unsaved changes?')) return;
-                            const copy = { ...t, id: crypto.randomUUID(), name: t.name + ' copy' };
-                            const saved = await api.save(copy);
-                            setDirty(false);
-                            setWorkflow(saved);
-                            setPage('editor');
-                            setSelected(saved.nodes[0].id);
-                            setFile('');
-                            setShowRun(false);
-                            await refresh();
-                          })
-                        }
-                      >
-                        Use template
-                        <ArrowRight size={14} />
-                      </Button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
+            {[false, true].map((ai) => (
+              <section key={String(ai)}>
+                <h2>{ai ? 'AI powered' : 'No AI needed'}</h2>
+                <p className="page-description">
+                  {ai
+                    ? 'Connect a local model or your own cloud provider in AI connections.'
+                    : 'No model, API key, account, or server required.'}
+                </p>
+                {
+                  <OrganizerCards
+                    ai={ai}
+                    choose={(id) => {
+                      setOrganizerTemplate(id);
+                      setPage('organizer');
+                    }}
+                  />
+                }
+                <div className={`template-grid ${ai ? 'ai-template-grid' : 'local-template-grid'}`}>
+                  {templates()
+                    .filter((t) => t.nodes.some((n) => n.data.kind === 'ai') === ai)
+                    .map((t, i) => (
+                      <article className="template-card" key={t.id}>
+                        <div className={`template-art art-${i}`}>
+                          <span className="template-mini">
+                            <FolderInput />
+                          </span>
+                          <span className="dash-line" />
+                          <span className="template-mini accent">
+                            {!ai ? <Folder /> : <Sparkles />}
+                          </span>
+                          <span className="dash-line" />
+                          <span className="template-mini">
+                            <Check />
+                          </span>
+                        </div>
+                        <div className="template-content">
+                          <span className="pill">{!ai ? 'NO AI REQUIRED' : 'AI POWERED'}</span>
+                          <h2>{t.name}</h2>
+                          <p>{t.description}</p>
+                          <div>
+                            <span>{t.nodes.length} connected steps</span>
+                            <Button
+                              disabled={busy}
+                              onClick={() =>
+                                void attempt(async () => {
+                                  if (dirty && !confirm('Discard unsaved changes?')) return;
+                                  const copy = {
+                                    ...t,
+                                    id: crypto.randomUUID(),
+                                    name: t.name + ' copy',
+                                  };
+                                  const saved = await api.save(copy);
+                                  setDirty(false);
+                                  setWorkflow(saved);
+                                  setPage('editor');
+                                  setSelected(saved.nodes[0].id);
+                                  setFile('');
+                                  setShowRun(false);
+                                  await refresh();
+                                })
+                              }
+                            >
+                              Use template
+                              <ArrowRight size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                </div>
+              </section>
+            ))}
             <div className="import-card">
               <div>
                 <Upload size={23} />

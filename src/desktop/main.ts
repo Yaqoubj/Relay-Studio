@@ -8,11 +8,21 @@ import { Store } from './database';
 import { RelayCloudClient, type CloudSession } from './cloud';
 import { execute, undoRun } from './engine';
 import { collectFiles } from './batch';
+import { scanFiles, buildPlan, applyPlan, undoPlan } from './organizer';
+import { updateDeliveryManifest } from './collection-analysis';
+import { needsAI, organizerTemplates, type OrganizerPreset } from '../shared/organizer';
+import { MaintenanceQueue } from './maintenance';
+import type {
+  ScanResult,
+  OrganizationPlan,
+  OrganizerProgress,
+  ScanOptions,
+  PlanOptions,
+} from '../shared/organizer';
 import { validateRunnable, validateWorkflow } from './validation';
 import { transform, validateEndpoint } from './ai';
 import type { AISettings, CloudSettings, Run, Workflow } from '../shared/types';
-if (process.env.RELAY_DATA_DIR && !app.isPackaged)
-  app.setPath('userData', process.env.RELAY_DATA_DIR);
+if (process.env.RELAY_DATA_DIR) app.setPath('userData', process.env.RELAY_DATA_DIR);
 let win: BrowserWindow,
   store: Store,
   active: AbortController | null = null,
@@ -22,6 +32,37 @@ let win: BrowserWindow,
 const watchers = new Map<string, FSWatcher>();
 const queue: { workflow: Workflow; source: string }[] = [];
 const files = new Set<string>();
+let organizationScan: ScanResult | null = null;
+let organizationPlan: OrganizationPlan | null = null;
+let organizationProgress: OrganizerProgress | null = null;
+let lastProgress = 0;
+function reportOrganizationProgress(progress: OrganizerProgress) {
+  organizationProgress = progress;
+  if (Date.now() - lastProgress > 150 && win && !win.isDestroyed()) {
+    lastProgress = Date.now();
+    win.webContents.send('studio:organizer-progress', progress);
+  }
+}
+async function organizationTask<T>(stage: string, task: (signal: AbortSignal) => Promise<T>) {
+  idle();
+  if (watchers.size) throw new Error('Pause folder watchers before organizing files.');
+  const controller = new AbortController();
+  active = controller;
+  reportOrganizationProgress({ stage, count: 0 });
+  update();
+  try {
+    return await task(controller.signal);
+  } finally {
+    active = null;
+    organizationProgress = null;
+    if (win && !win.isDestroyed()) win.webContents.send('studio:organizer-progress', null);
+    update();
+    if (closeAfterRun) {
+      closeAfterRun = false;
+      win.close();
+    } else void drain();
+  }
+}
 const page = path.join(__dirname, 'renderer', 'index.html');
 function update() {
   if (win && !win.isDestroyed()) win.webContents.send('studio:update');
@@ -38,6 +79,55 @@ function settings(): AISettings {
     ...JSON.parse(store.get('ai-settings') || '{}'),
     hasKey: !!store.get('ai-key'),
   };
+}
+async function prepareOrganizationReview(options: PlanOptions, signal: AbortSignal) {
+  if (!organizationScan) throw new Error('Scan a folder first.');
+  await allowFolder(organizationScan.root);
+  if (options.template !== 'rename') await allowFolder(options.destination);
+  const config = settings();
+  if (needsAI(options.template)) {
+    validateEndpoint(config);
+    if (config.provider === 'cloud' && (!config.allowCloud || !apiKey()))
+      throw new Error('Enable cloud document processing and add your key in AI connections first.');
+    const answer = await dialog.showMessageBox(win, {
+      message: 'Analyze these documents with your model?',
+      detail: `Provider: ${config.provider}\nModel: ${config.model}\nEndpoint: ${config.endpoint}\nUp to ${options.maxAIRequests ?? 20} files/requests, ${options.maxCharacters ?? 20000} characters per file (1,000,000 per batch). ${config.provider === 'cloud' ? 'Extracted document text is sent to this provider; charges may apply.' : 'Document text is sent to your local model.'} OCR runs locally. No file changes are applied during analysis.`,
+      buttons: ['Cancel', 'Analyze documents'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (answer.response !== 1) return false;
+  }
+  signal.throwIfAborted();
+  const key = needsAI(options.template) && config.provider === 'cloud' ? apiKey() : '';
+  const plan = await buildPlan(organizationScan, options, signal, {
+    progress: reportOrganizationProgress,
+    ai: (text, step, abort) => transform(config, key, text, step, abort),
+    fingerprint: JSON.stringify({
+      provider: config.provider,
+      endpoint: config.endpoint,
+      model: config.model,
+    }),
+    cached: (cacheKey) => store.aiCached(cacheKey),
+    cache: (cacheKey, value) => store.cacheAI(cacheKey, value),
+  });
+  store.putOrganizationPlan(plan, undefined, true);
+  organizationPlan = plan;
+  store.set('organization-current', plan.id);
+  return true;
+}
+function organizationPresets(): OrganizerPreset[] {
+  return JSON.parse(store.get('organization-presets') || '[]');
+}
+async function runOrganizationPreset(preset: OrganizerPreset) {
+  return organizationTask('Preparing saved workflow', async (signal) => {
+    await allowFolder(preset.scan.root);
+    organizationScan = await scanFiles(preset.scan, signal, reportOrganizationProgress);
+    store.putOrganizationScan(organizationScan);
+    if (!(await prepareOrganizationReview(preset.options, signal)))
+      throw new Error('Analysis was cancelled.');
+    return organizationPlan!.id;
+  });
 }
 function apiKey() {
   const cipher = store.get('ai-key');
@@ -315,12 +405,206 @@ else {
     try {
       await fs.mkdir(app.getPath('userData'), { recursive: true });
       store = new Store(path.join(app.getPath('userData'), 'relay.sqlite'));
+      organizationScan = store.organizationScan();
+      const latestPlan = store.get('organization-current');
+      if (latestPlan) organizationPlan = store.organizationPlan(latestPlan);
     } catch (error) {
       dialog.showErrorBox('Unable to open workspace', String(error));
       app.quit();
       return;
     }
     createWindow();
+    handle('organizer-state', () => ({
+      scan: organizationScan,
+      plan: organizationPlan,
+      progress: organizationProgress,
+      history: store.organizationHistory(),
+      presets: organizationPresets(),
+    }));
+    handle('organizer-clear-cache', () => {
+      idle();
+      store.db.exec('DELETE FROM organization_ai_cache');
+    });
+    handle('organizer-scan', (options: ScanOptions) =>
+      organizationTask('Scanning', async (signal) => {
+        await allowFolder(options.root);
+        organizationScan = await scanFiles(options, signal, reportOrganizationProgress);
+        store.putOrganizationScan(organizationScan);
+        organizationPlan = null;
+        store.set('organization-current', '');
+      }),
+    );
+    handle('organizer-plan', (options: PlanOptions) =>
+      organizationTask('Preparing review', (signal) => prepareOrganizationReview(options, signal)),
+    );
+    handle(
+      'organizer-save-preset',
+      async (input: Omit<OrganizerPreset, 'id' | 'nextRun'> & { id?: string }) => {
+        idle();
+        if (
+          !input ||
+          typeof input.name !== 'string' ||
+          !input.name.trim() ||
+          input.name.length > 80 ||
+          typeof input.enabled !== 'boolean' ||
+          !Number.isInteger(input.everyHours) ||
+          input.everyHours < 1 ||
+          input.everyHours > 8760 ||
+          !input.scan ||
+          typeof input.scan.recursive !== 'boolean' ||
+          !Array.isArray(input.scan.exclude) ||
+          input.scan.exclude.some((p) => typeof p !== 'string' || !path.isAbsolute(p)) ||
+          !input.options ||
+          !organizerTemplates.some((t) => t.id === input.options.template)
+        )
+          throw new Error(
+            'Enter a name, valid folder settings, and an interval from 1 to 8760 hours.',
+          );
+        if (input.enabled && needsAI(input.options.template))
+          throw new Error(
+            'AI templates require manual analysis confirmation. Save them without a schedule.',
+          );
+        await allowFolder(input.scan.root);
+        if (input.options.template !== 'rename') await allowFolder(input.options.destination);
+        idle();
+        const presets = organizationPresets();
+        const prior = input.id ? presets.find((p) => p.id === input.id) : undefined;
+        if (input.id && !prior) throw new Error('Saved workflow not found.');
+        if (!prior && presets.length >= 30)
+          throw new Error('Remove a saved workflow before adding more (limit 30).');
+        const preset: OrganizerPreset = {
+          id: prior?.id || randomUUID(),
+          name: input.name.trim(),
+          scan: input.scan,
+          options: input.options,
+          everyHours: input.everyHours,
+          enabled: input.enabled,
+          nextRun:
+            prior?.enabled && prior.everyHours === input.everyHours
+              ? prior.nextRun
+              : new Date(Date.now() + input.everyHours * 3600000).toISOString(),
+          lastRun: prior?.lastRun,
+          lastPlanId: prior?.lastPlanId,
+          error: prior?.error,
+        };
+        store.set(
+          'organization-presets',
+          JSON.stringify([...presets.filter((p) => p.id !== preset.id), preset]),
+        );
+        update();
+      },
+    );
+    handle('organizer-remove-preset', (id: string) => {
+      idle();
+      store.set(
+        'organization-presets',
+        JSON.stringify(organizationPresets().filter((p) => p.id !== id)),
+      );
+      update();
+    });
+    handle('organizer-run-preset', async (id: string) => {
+      const preset = organizationPresets().find((p) => p.id === id);
+      if (!preset) throw new Error('Saved workflow not found.');
+      const planId = await runOrganizationPreset(preset);
+      const presets = organizationPresets();
+      const current = presets.find((p) => p.id === id);
+      if (current) {
+        current.lastPlanId = planId;
+        current.lastRun = new Date().toISOString();
+        current.error = undefined;
+        store.set('organization-presets', JSON.stringify(presets));
+        update();
+      }
+    });
+    const maintenance = new MaintenanceQueue({
+      list: organizationPresets,
+      save: (presets) => {
+        store.set('organization-presets', JSON.stringify(presets));
+        update();
+      },
+      available: () => !active && !watchers.size && !quitting,
+      prepare: runOrganizationPreset,
+      notify,
+    });
+    const maintenanceTimer = setInterval(() => {
+      void maintenance
+        .pulse()
+        .catch((error) => notify(`Scheduled review stopped: ${String(error)}`));
+    }, 30000);
+    maintenanceTimer.unref();
+    app.once('before-quit', () => clearInterval(maintenanceTimer));
+    handle('organizer-select', (ids: string[]) => {
+      idle();
+      const plan = organizationPlan;
+      if (
+        !plan ||
+        plan.status !== 'review' ||
+        !Array.isArray(ids) ||
+        ids.some((id) => typeof id !== 'string')
+      )
+        throw new Error('Open a review before selecting files.');
+      const selected = new Set(ids);
+      for (const item of plan.items) item.selected = !item.issue && selected.has(item.id);
+      updateDeliveryManifest(plan);
+      store.putOrganizationPlan(plan, undefined, true);
+      update();
+    });
+    handle('organizer-apply', () =>
+      organizationTask('Confirming changes', async (signal) => {
+        const plan = organizationPlan;
+        if (!plan || plan.status !== 'review') throw new Error('Create and review a plan first.');
+        await allowFolder(plan.root);
+        await allowFolder(plan.options.destination);
+        const count = plan.items.filter((i) => i.selected && !i.issue).length;
+        if (!count) throw new Error('Select at least one change.');
+        const answer = await dialog.showMessageBox(win, {
+          type: 'question',
+          message: `Apply ${count} reviewed file changes?`,
+          detail: `${plan.options.operation === 'move' ? 'Move or rename' : 'Copy'} files from ${plan.root}\nDestination: ${plan.options.destination}\nExisting files will not be overwritten.`,
+          buttons: ['Cancel', 'Apply changes'],
+          defaultId: 0,
+          cancelId: 0,
+        });
+        if (answer.response !== 1) return;
+        signal.throwIfAborted();
+        await applyPlan(
+          plan,
+          signal,
+          (p, item) => store.putOrganizationPlan(p, item),
+          reportOrganizationProgress,
+        );
+      }),
+    );
+    handle('organizer-undo', () =>
+      organizationTask('Confirming undo', async (signal) => {
+        const plan = organizationPlan;
+        if (!plan) throw new Error('Open a recorded batch first.');
+        await allowFolder(plan.root);
+        await allowFolder(plan.options.destination);
+        const answer = await dialog.showMessageBox(win, {
+          message: 'Undo this batch?',
+          detail:
+            'Unchanged copies are removed; moved files are restored. Undo stops if a file changed or its original path is occupied. Created folders remain.',
+          buttons: ['Cancel', 'Undo batch'],
+          defaultId: 0,
+          cancelId: 0,
+        });
+        if (answer.response !== 1) return;
+        signal.throwIfAborted();
+        await undoPlan(
+          plan,
+          signal,
+          (p, item) => store.putOrganizationPlan(p, item),
+          reportOrganizationProgress,
+        );
+      }),
+    );
+    handle('organizer-load', (id: string) => {
+      idle();
+      organizationPlan = store.organizationPlan(id);
+      store.set('organization-current', id);
+      update();
+    });
     handle('snapshot', () => ({
       workflows: store.workflows(),
       runs: store.runs(),

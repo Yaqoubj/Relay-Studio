@@ -1,6 +1,23 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { StudioAPI } from '../shared/types';
 const api: StudioAPI = {
+  organizerState: () => ipcRenderer.invoke('studio:organizer-state'),
+  onOrganizerProgress: (callback) => {
+    const listener = (_event: unknown, progress: Parameters<typeof callback>[0]) =>
+      callback(progress);
+    ipcRenderer.on('studio:organizer-progress', listener);
+    return () => ipcRenderer.removeListener('studio:organizer-progress', listener);
+  },
+  organizerScan: (options) => ipcRenderer.invoke('studio:organizer-scan', options),
+  organizerPlan: (options) => ipcRenderer.invoke('studio:organizer-plan', options),
+  organizerSelect: (ids) => ipcRenderer.invoke('studio:organizer-select', ids),
+  organizerApply: () => ipcRenderer.invoke('studio:organizer-apply'),
+  organizerUndo: () => ipcRenderer.invoke('studio:organizer-undo'),
+  organizerLoad: (id) => ipcRenderer.invoke('studio:organizer-load', id),
+  organizerSavePreset: (preset) => ipcRenderer.invoke('studio:organizer-save-preset', preset),
+  organizerRemovePreset: (id) => ipcRenderer.invoke('studio:organizer-remove-preset', id),
+  organizerRunPreset: (id) => ipcRenderer.invoke('studio:organizer-run-preset', id),
+  organizerClearCache: () => ipcRenderer.invoke('studio:organizer-clear-cache'),
   snapshot: () => ipcRenderer.invoke('studio:snapshot'),
   save: (w) => ipcRenderer.invoke('studio:save', w),
   remove: (id) => ipcRenderer.invoke('studio:remove', id),
