@@ -13,6 +13,16 @@ function Invoke-Checked {
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$Command failed with exit code $LASTEXITCODE." }
 }
+function Invoke-Packager {
+    $arguments = @('--no-install', 'electron-builder', '--win', 'nsis', '--x64', '--publish', 'never')
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        & npx.cmd @arguments
+        if ($LASTEXITCODE -eq 0) { return }
+        if ($attempt -eq 2) { throw "Installer packaging failed twice (exit code $LASTEXITCODE). See the electron-builder error above." }
+        Write-Warning 'Installer packaging failed. Waiting five seconds before one retry in case Windows temporarily locked the build folder.'
+        Start-Sleep -Seconds 5
+    }
+}
 function Read-Checked {
     param([string]$Command, [string[]]$Arguments)
     $result = & $Command @Arguments
@@ -34,7 +44,7 @@ try {
         Invoke-Checked 'npm.cmd' @('ci')
         Invoke-Checked 'npm.cmd' @('test')
         Invoke-Checked 'npm.cmd' @('run', 'test:e2e')
-        Invoke-Checked 'npx.cmd' @('--no-install', 'electron-builder', '--win', 'nsis', '--x64', '--publish', 'never')
+        Invoke-Packager
         Invoke-Checked 'node' @('scripts/smoke-packaged.mjs')
         $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $([IO.Path]::GetFileName($installer))" | Set-Content -LiteralPath $checksums -Encoding ascii
