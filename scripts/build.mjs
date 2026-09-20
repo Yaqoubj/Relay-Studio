@@ -11,6 +11,7 @@ await build({
     'chokidar',
     'pdf-parse',
     'exifr',
+    '@napi-rs/canvas',
     'mammoth',
     'tesseract.js',
     '@tesseract.js-data/eng',

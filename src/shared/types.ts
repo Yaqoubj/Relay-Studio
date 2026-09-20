@@ -83,6 +83,7 @@ export interface StudioAPI {
     callback: (progress: import('./organizer').OrganizerProgress | null) => void,
   ): () => void;
   organizerScan(options: import('./organizer').ScanOptions): Promise<void>;
+  organizerResumeScan(): Promise<void>;
   organizerPlan(options: import('./organizer').PlanOptions): Promise<boolean>;
   organizerSelect(ids: string[]): Promise<void>;
   organizerApply(): Promise<void>;

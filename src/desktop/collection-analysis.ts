@@ -216,6 +216,17 @@ export async function analyzeCollection(
       );
       item.action = 'copy';
       item.sourceHash = hash;
+      if (options.template === 'delivery') {
+        const privateName =
+          /(?:password|secret|private|passport|tax[\s._-]|bank[\s._-]|credential|api[\s._-]?key)/i.test(
+            file.relative,
+          );
+        item.group = privateName ? 'Review private-looking files' : 'Files to share';
+        if (privateName) {
+          item.selected = false;
+          item.reason += ' · Filename looks private; include only after checking it';
+        }
+      }
       if (options.template === 'backup') {
         try {
           await checkPath(target);

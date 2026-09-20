@@ -9,6 +9,7 @@ const api: StudioAPI = {
     return () => ipcRenderer.removeListener('studio:organizer-progress', listener);
   },
   organizerScan: (options) => ipcRenderer.invoke('studio:organizer-scan', options),
+  organizerResumeScan: () => ipcRenderer.invoke('studio:organizer-resume-scan'),
   organizerPlan: (options) => ipcRenderer.invoke('studio:organizer-plan', options),
   organizerSelect: (ids) => ipcRenderer.invoke('studio:organizer-select', ids),
   organizerApply: () => ipcRenderer.invoke('studio:organizer-apply'),

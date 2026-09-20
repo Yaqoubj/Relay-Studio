@@ -18,6 +18,7 @@ import {
   type OrganizerState,
   type OrganizerProgress,
   type PlanOptions,
+  type PlanItem,
 } from '../shared/organizer';
 import './organizer.css';
 
@@ -44,30 +45,41 @@ export function OrganizerCards({
   choose: (id: OrganizerTemplate) => void;
   ai?: boolean;
 }) {
+  const cards = (advanced: boolean) =>
+    organizerTemplates
+      .filter(
+        (template) =>
+          !!template.ai === ai &&
+          ['smart', 'smart-ai', 'combine', 'cleanup', 'delivery'].includes(template.id) !==
+            advanced,
+      )
+      .map((template) => {
+        const Icon = marks[template.id] || (ai ? Sparkles : FolderSearch);
+        return (
+          <button
+            className="organization-template"
+            key={template.id}
+            onClick={() => choose(template.id)}
+          >
+            <Icon size={23} />
+            <span className="organization-badge">{ai ? 'AI POWERED' : 'NO AI'}</span>
+            <h3>{template.name}</h3>
+            <p>{template.description}</p>
+            <code>{template.example}</code>
+            <span className="organization-card-link">
+              Open <ArrowRight size={15} />
+            </span>
+          </button>
+        );
+      });
   return (
-    <div className="organization-cards">
-      {organizerTemplates
-        .filter((template) => !!template.ai === ai)
-        .map((template) => {
-          const Icon = marks[template.id] || (ai ? Sparkles : FolderSearch);
-          return (
-            <button
-              className="organization-template"
-              key={template.id}
-              onClick={() => choose(template.id)}
-            >
-              <Icon size={23} />
-              <span className="organization-badge">{ai ? 'AI POWERED' : 'NO AI'}</span>
-              <h3>{template.name}</h3>
-              <p>{template.description}</p>
-              <code>{template.example}</code>
-              <span className="organization-card-link">
-                Set up template <ArrowRight size={15} />
-              </span>
-            </button>
-          );
-        })}
-    </div>
+    <>
+      <div className="organization-cards">{cards(false)}</div>
+      <details className="organization-presets">
+        <summary>Specialized {ai ? 'AI' : 'file'} tools</summary>
+        <div className="organization-cards">{cards(true)}</div>
+      </details>
+    </>
   );
 }
 export function Organizer({
@@ -79,7 +91,7 @@ export function Organizer({
 }) {
   const [state, setState] = useState<OrganizerState | null>(null);
   const [progress, setProgress] = useState<OrganizerProgress | null>(null);
-  const [options, setOptions] = useState<PlanOptions>(defaults(initialTemplate || 'drive'));
+  const [options, setOptions] = useState<PlanOptions>(defaults(initialTemplate || 'smart'));
   const [root, setRoot] = useState('');
   const [recursive, setRecursive] = useState(true);
   const [scanDirty, setScanDirty] = useState(false);
@@ -95,6 +107,7 @@ export function Organizer({
   const [scheduled, setScheduled] = useState(false);
   const locked = busy || working;
   const usesAI = needsAI(options.template);
+  const smart = ['smart', 'smart-ai', 'combine'].includes(options.template);
   const copyOnly = [
     'delivery',
     'backup',
@@ -208,6 +221,16 @@ export function Organizer({
     ) || 0;
   const conflictCount = plan?.items.filter((i) => i.issue).length || 0;
   const template = organizerTemplates.find((t) => t.id === options.template)!;
+  const groups = useMemo(() => {
+    const result = new Map<string, PlanItem[]>();
+    for (const item of plan?.items || []) {
+      const group = item.group || filename(item.destination) || 'Other';
+      const entries = result.get(group);
+      if (entries) entries.push(item);
+      else result.set(group, [item]);
+    }
+    return [...result.entries()];
+  }, [plan]);
   const toggle = (id: string) => {
     setSelected((previous) => {
       const next = new Set(previous);
@@ -233,7 +256,7 @@ export function Organizer({
         </span>
       </div>
       <div className="organization-tabs">
-        {organizerTemplates.slice(0, 3).map((t) => {
+        {organizerTemplates.slice(0, 2).map((t) => {
           const Icon = marks[t.id] || FolderSearch;
           return (
             <button
@@ -248,7 +271,7 @@ export function Organizer({
           );
         })}
         <label className="organization-template-picker">
-          Template{' '}
+          Other tools{' '}
           <select
             aria-label="Organizer template"
             value={options.template}
@@ -256,7 +279,7 @@ export function Organizer({
             onChange={(e) => choose(e.target.value as OrganizerTemplate)}
           >
             {[false, true].map((ai) => (
-              <optgroup key={String(ai)} label={ai ? 'AI powered' : 'No AI needed'}>
+              <optgroup key={String(ai)} label={ai ? 'AI tools' : 'File tools'}>
                 {organizerTemplates
                   .filter((t) => !!t.ai === ai)
                   .map((t) => (
@@ -338,6 +361,15 @@ export function Organizer({
             <FolderSearch size={17} />
             Scan files
           </button>
+          {scan?.status === 'limited' && !scanDirty && (
+            <button
+              className="organization-action"
+              disabled={locked}
+              onClick={() => act(() => api.organizerResumeScan())}
+            >
+              Continue scan · {scan.pendingFolders?.length || 0} folders left
+            </button>
+          )}
         </div>
         <div className="organization-panel">
           <div className="organization-step">
@@ -345,7 +377,55 @@ export function Organizer({
             <h2>{template.name}</h2>
           </div>
           <p>{template.description}</p>
-          {options.template === 'rename' ? (
+          {smart ? (
+            <>
+              <label>Where should files go?</label>
+              <select
+                aria-label="Organization placement"
+                disabled={locked}
+                value={options.placement || 'inside'}
+                onChange={(e) => change({ placement: e.target.value as PlanOptions['placement'] })}
+              >
+                <option value="inside">Create folders inside this location</option>
+                <option value="subfolder">Create one organized subfolder</option>
+                <option value="elsewhere">Use another folder</option>
+              </select>
+              {options.placement === 'subfolder' && (
+                <label>
+                  New subfolder name
+                  <input
+                    aria-label="New subfolder name"
+                    disabled={locked}
+                    value={options.subfolderName || ''}
+                    onChange={(e) => change({ subfolderName: e.target.value })}
+                  />
+                </label>
+              )}
+              {options.placement === 'elsewhere' && (
+                <div className="organization-path">
+                  <span title={options.destination}>
+                    {options.destination || 'Choose another folder'}
+                  </span>
+                  <button disabled={locked} onClick={() => browse('destination')}>
+                    Browse destination
+                  </button>
+                </div>
+              )}
+              <label className="organization-check">
+                <input
+                  type="checkbox"
+                  disabled={locked}
+                  checked={options.renameSmart !== false}
+                  onChange={(e) => change({ renameSmart: e.target.checked })}
+                />
+                Suggest cleaner names when a pattern is clear
+              </label>
+              <p className="organization-hint">
+                Relay groups episodes and subtitles, pictures, screenshots, documents, audio,
+                archives, and installers. Unknown types wait for your review.
+              </p>
+            </>
+          ) : options.template === 'rename' ? (
             <>
               <label htmlFor="rename-pattern">Name pattern</label>
               <input
@@ -398,7 +478,7 @@ export function Organizer({
               </div>
             </>
           )}
-          {['storage', 'archive'].includes(options.template) && (
+          {['storage', 'archive', 'cleanup'].includes(options.template) && (
             <div className="organization-advanced">
               <label>
                 Older than (days)
@@ -412,7 +492,7 @@ export function Organizer({
                   onChange={(e) => change({ olderThanDays: Number(e.target.value) })}
                 />
               </label>
-              {options.template === 'storage' && (
+              {['storage', 'cleanup'].includes(options.template) && (
                 <label>
                   At least (MB)
                   <input
@@ -457,11 +537,13 @@ export function Organizer({
                 English.
               </p>
               <label>
-                Allowed categories / project names
+                {smart
+                  ? 'AI document topics are suggested automatically'
+                  : 'Allowed categories / project names'}
                 <input
                   aria-label="Allowed AI categories"
                   value={options.labels ?? ''}
-                  disabled={locked}
+                  disabled={locked || smart}
                   onChange={(e) => change({ labels: e.target.value })}
                 />
               </label>
@@ -550,8 +632,10 @@ export function Organizer({
               !scan ||
               scanDirty ||
               scan.root !== root ||
-              scan.status !== 'complete' ||
-              (!options.destination && options.template !== 'rename')
+              (scan.status !== 'complete' && !(smart && scan.status === 'limited')) ||
+              (!options.destination &&
+                options.template !== 'rename' &&
+                (!smart || options.placement === 'elsewhere'))
             }
             onClick={() =>
               act(async () => {
@@ -602,9 +686,9 @@ export function Organizer({
           <details>
             <summary>Scan details</summary>
             <p>
-              Saved {new Date(scan.createdAt).toLocaleString()}. The date rules use file
-              modification time, not capture time. Scans stop at 50,000 files or 200,000 entries;
-              choose smaller folders if the limit is reached.
+              Saved {new Date(scan.createdAt).toLocaleString()}. The photo date rule uses file
+              modification time. Large scans pause between completed folders near 50,000 files or
+              200,000 entries. Review this section, then continue with pending folders.
             </p>
             <div className="organization-breakdown">
               {fileCategories.map((c) => (
@@ -660,6 +744,51 @@ export function Organizer({
               </ul>
             </details>
           )}
+          {ready &&
+            (smart || ['cleanup', 'delivery'].includes(options.template)) &&
+            !!groups.length && (
+              <div className="organization-groups">
+                <h3>Proposed groups</h3>
+                {groups.map(([name, items]) => (
+                  <article key={name}>
+                    <div>
+                      <strong>{name}</strong>
+                      <small>
+                        {items.length} files · {items.filter((item) => item.issue).length} conflicts
+                      </small>
+                    </div>
+                    <button
+                      disabled={locked}
+                      onClick={() => {
+                        setSelected(
+                          (previous) =>
+                            new Set([
+                              ...previous,
+                              ...items.filter((item) => !item.issue).map((item) => item.id),
+                            ]),
+                        );
+                        setReviewed(false);
+                      }}
+                    >
+                      Include group
+                    </button>
+                    <button
+                      disabled={locked}
+                      onClick={() => {
+                        setSelected((previous) => {
+                          const next = new Set(previous);
+                          items.forEach((item) => next.delete(item.id));
+                          return next;
+                        });
+                        setReviewed(false);
+                      }}
+                    >
+                      Skip group
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
           <div className="organization-table-tools">
             <input
               aria-label="Search changes"
@@ -887,7 +1016,9 @@ export function Organizer({
             locked ||
             !presetName.trim() ||
             !root ||
-            (!options.destination && options.template !== 'rename')
+            (!options.destination &&
+              options.template !== 'rename' &&
+              (!smart || options.placement === 'elsewhere'))
           }
           onClick={() =>
             act(async () => {

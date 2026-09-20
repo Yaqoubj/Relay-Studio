@@ -83,16 +83,20 @@ function settings(): AISettings {
 async function prepareOrganizationReview(options: PlanOptions, signal: AbortSignal) {
   if (!organizationScan) throw new Error('Scan a folder first.');
   await allowFolder(organizationScan.root);
-  if (options.template !== 'rename') await allowFolder(options.destination);
+  if (
+    options.template !== 'rename' &&
+    !(['smart', 'smart-ai'].includes(options.template) && options.placement !== 'elsewhere')
+  )
+    await allowFolder(options.destination);
   const config = settings();
   if (needsAI(options.template)) {
     validateEndpoint(config);
     if (config.provider === 'cloud' && (!config.allowCloud || !apiKey()))
       throw new Error('Enable cloud document processing and add your key in AI connections first.');
     const answer = await dialog.showMessageBox(win, {
-      message: 'Analyze these documents with your model?',
+      message: 'Use your model to improve this organization plan?',
       detail: `Provider: ${config.provider}\nModel: ${config.model}\nEndpoint: ${config.endpoint}\nUp to ${options.maxAIRequests ?? 20} files/requests, ${options.maxCharacters ?? 20000} characters per file (1,000,000 per batch). ${config.provider === 'cloud' ? 'Extracted document text is sent to this provider; charges may apply.' : 'Document text is sent to your local model.'} OCR runs locally. No file changes are applied during analysis.`,
-      buttons: ['Cancel', 'Analyze documents'],
+      buttons: ['Cancel', 'Analyze'],
       defaultId: 0,
       cancelId: 0,
     });
@@ -429,6 +433,26 @@ else {
       organizationTask('Scanning', async (signal) => {
         await allowFolder(options.root);
         organizationScan = await scanFiles(options, signal, reportOrganizationProgress);
+        store.putOrganizationScan(organizationScan);
+        organizationPlan = null;
+        store.set('organization-current', '');
+      }),
+    );
+    handle('organizer-resume-scan', () =>
+      organizationTask('Scanning next section', async (signal) => {
+        if (
+          !organizationScan?.options ||
+          organizationScan.status !== 'limited' ||
+          !organizationScan.pendingFolders?.length
+        )
+          throw new Error('No unfinished scan section is available. Start a new scan.');
+        await allowFolder(organizationScan.root);
+        organizationScan = await scanFiles(
+          organizationScan.options,
+          signal,
+          reportOrganizationProgress,
+          organizationScan,
+        );
         store.putOrganizationScan(organizationScan);
         organizationPlan = null;
         store.set('organization-current', '');

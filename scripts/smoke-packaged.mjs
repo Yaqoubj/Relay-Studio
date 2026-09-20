@@ -43,6 +43,10 @@ try {
       ).pages[0].data;
       const { createWorker } = load('tesseract.js');
       const { langPath } = load('@tesseract.js-data/eng');
+      const { createCanvas, loadImage } = load('@napi-rs/canvas');
+      const canvas = createCanvas(9, 8);
+      canvas.getContext('2d').fillRect(0, 0, 9, 8);
+      const decoded = await loadImage(canvas.toBuffer('image/png'));
       let worker;
       let timeout;
       try {
@@ -61,6 +65,7 @@ try {
           ocr,
           docx: typeof load('mammoth').extractRawText,
           exif: typeof load('exifr').parse,
+          image: decoded.width === 9 && decoded.height === 8,
         };
       } finally {
         clearTimeout(timeout);
@@ -75,8 +80,9 @@ try {
   assert.match(result.ocr, /Packaged PDF works/i);
   assert.equal(result.docx, 'function');
   assert.equal(result.exif, 'function');
+  assert.equal(result.image, true);
   console.log(
-    'Packaged application launches; SQLite, renderer, PDF rendering, offline OCR, DOCX and EXIF dependencies work.',
+    'Packaged application launches; SQLite, renderer, PDF rendering, offline OCR, DOCX, EXIF and image comparison dependencies work.',
   );
 } finally {
   await app.close();

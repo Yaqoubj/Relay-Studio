@@ -2,17 +2,17 @@
 
 ## Organize an existing collection
 
-1. Make a personal test folder containing a PDF, a photo inside a `Travel` subfolder, and a text file. Make a separate output folder.
-2. Open **File organizer → Organize my drive**, browse to both folders, and keep **Copy** selected for this first run.
-3. **Scan files**, then **Build review**. Expect category folders such as `Documents` and `Photos/Travel`.
+1. Make a personal test folder containing a PDF, three pictures named `Trip-001.jpg` through `Trip-003.jpg`, and a video named `Show.S01E02.mkv`.
+2. Open **File organizer → Organize this location**, and browse to that folder. Leave **Create folders inside this location** selected.
+3. **Scan files**, then **Build review**. Expect groups for `Documents`, `Pictures/Trip`, and `Videos/Show/Season 01`.
 4. Uncheck one file. Confirm that no output exists yet, acknowledge the selected changes, and **Apply selected changes**.
-5. Use **Undo batch**. The copied files disappear; the originals remain. Empty destination folders remain too.
+5. Use **Undo batch**. The original files return, and Relay removes folders it created if they are empty.
 6. Select **Bulk rename**, scan again, and try `{{number}}-{{stem}}{{ext}}`. The review shows every proposed name before you apply it.
 7. For a conflict demonstration, place a file at one proposed destination before building a new review. That item is marked conflicting and excluded.
 
-The template library has separate **No AI needed** and **AI powered** sections. The collection organizer never calls a model. Saved plans and batches are accessible at the bottom of its page and survive app restarts.
+Switch to **Organize with AI** to let your connected model improve document topics and names. Local grouping still runs first. AI uses document text, not visual understanding of photos. Saved plans and batches are accessible at the bottom of the page and survive app restarts.
 
-![Collection review](organizer-review.png)
+![General organization review](smart-review.png)
 
 ## Automate new arrivals
 

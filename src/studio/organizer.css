@@ -632,3 +632,27 @@
     flex-wrap: wrap;
   }
 }
+.organization-groups {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+.organization-groups h3 {
+  margin: 0 0 0.25rem;
+}
+.organization-groups article {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border, #343b4a);
+  border-radius: 12px;
+}
+.organization-groups article div {
+  flex: 1;
+  display: grid;
+  gap: 0.2rem;
+}
+.organization-groups article small {
+  opacity: 0.7;
+}

@@ -1,4 +1,8 @@
 export type OrganizerTemplate =
+  | 'smart'
+  | 'smart-ai'
+  | 'combine'
+  | 'cleanup'
   | 'drive'
   | 'downloads'
   | 'rename'
@@ -35,6 +39,7 @@ export type ScanResult = {
   skipped: number;
   warnings: string[];
   status: 'complete' | 'cancelled' | 'limited';
+  pendingFolders?: string[];
   options?: ScanOptions;
 };
 export type PlanOptions = {
@@ -53,6 +58,9 @@ export type PlanOptions = {
   minConfidence?: number;
   labels?: string;
   ocr?: boolean;
+  placement?: 'inside' | 'subfolder' | 'elsewhere';
+  subfolderName?: string;
+  renameSmart?: boolean;
 };
 export type PlanItem = {
   id: string;
@@ -79,6 +87,7 @@ export type PlanItem = {
   content?: string;
   sourceHash?: string;
   keeper?: { path: string; stamp: FileStamp; hash: string };
+  group?: string;
 };
 export type OrganizationPlan = {
   version: 1;
@@ -100,6 +109,7 @@ export type OrganizationPlan = {
   error?: string;
   notes?: string[];
   analysis?: { requests: number; cached: number; characters: number };
+  createdFolders?: string[];
 };
 export type OrganizerProgress = { stage: string; count: number; total?: number; path?: string };
 export type OrganizerState = {
@@ -122,6 +132,34 @@ export const organizerTemplates: {
   example: string;
   ai?: boolean;
 }[] = [
+  {
+    id: 'smart',
+    name: 'Organize this location',
+    description:
+      'Find related files, make useful folders, and propose moves and names in one review.',
+    example: 'Downloads/Show.S02E03.mkv → Downloads/Videos/Show/Season 02',
+  },
+  {
+    id: 'smart-ai',
+    name: 'Organize with AI',
+    ai: true,
+    description:
+      'Start with local grouping, then use your connected model to suggest document topics and names.',
+    example: 'Downloads/scan.pdf → Downloads/Documents/Finance/Rental agreement.pdf',
+  },
+  {
+    id: 'cleanup',
+    name: 'Clean up storage',
+    description: 'Find exact duplicates and large old files together, then review what to archive.',
+    example: 'Extra copies + old videos → chosen archive folder',
+  },
+  {
+    id: 'combine',
+    name: 'Combine collections',
+    description:
+      'Bring files from scattered folders under one parent into a chosen library structure.',
+    example: 'Old drive/Trips/*.jpg → Pictures/Trips',
+  },
   {
     id: 'drive',
     name: 'Organize my drive',
@@ -173,9 +211,9 @@ export const organizerTemplates: {
   },
   {
     id: 'delivery',
-    name: 'Prepare a delivery',
+    name: 'Prepare to share',
     description:
-      'Copy a selected folder tree into a delivery folder and generate a checksum manifest for the files you include.',
+      'Gather selected files, flag private-looking names, and create a checksum manifest for the copies.',
     example: 'Selected documents + SHA256SUMS.txt',
   },
   {
@@ -241,7 +279,8 @@ export const organizerTemplates: {
     example: 'document.pdf → document.filing-advice.md',
   },
 ];
-export const needsAI = (template: OrganizerTemplate) => template.startsWith('ai-');
+export const needsAI = (template: OrganizerTemplate) =>
+  template.startsWith('ai-') || template === 'smart-ai';
 export type OrganizerPreset = {
   id: string;
   name: string;
@@ -258,10 +297,11 @@ export function organizerDefaults(template: OrganizerTemplate): PlanOptions {
   return {
     template,
     destination: '',
-    operation: 'copy',
+    operation: ['smart', 'smart-ai', 'combine', 'cleanup'].includes(template) ? 'move' : 'copy',
     preserveStructure: ['drive', 'archive', 'storage', 'delivery', 'backup'].includes(template),
-    categories:
-      template === 'photos'
+    categories: ['smart', 'smart-ai', 'combine', 'cleanup'].includes(template)
+      ? fileCategories
+      : template === 'photos'
         ? ['Photos', 'Other']
         : template === 'ai-screenshots'
           ? ['Photos']
@@ -280,6 +320,9 @@ export function organizerDefaults(template: OrganizerTemplate): PlanOptions {
     minConfidence: 0.8,
     labels: 'Work, Finance, Personal, Reference',
     ocr: true,
+    placement: template === 'combine' ? 'elsewhere' : 'inside',
+    subfolderName: 'Organized',
+    renameSmart: true,
   };
 }
 export const fileCategories: FileCategory[] = [

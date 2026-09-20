@@ -7,7 +7,7 @@
 <p align="center"><strong>Organize existing files. Automate the ones that arrive next.</strong></p>
 
 <p align="center">
-  Scan a folder or data drive, review the changes, then copy, move, or rename the selected files. Use visual workflows for recurring tasks and optional AI.
+  Pick a messy folder, review Relay's suggested groups and names, then apply the changes. Use visual workflows for recurring tasks and optional AI.
 </p>
 
 <p align="center">
@@ -22,20 +22,25 @@
   · <a href="docs/architecture.md">Read the architecture</a>
 </p>
 
-![Reviewing selected file changes in Relay Studio](docs/organizer-review.png)
+![Reviewing a general organization plan in Relay Studio](docs/smart-review.png)
+
+![Choosing where files should go](docs/smart-setup.png)
 
 ## Two ways to work with files
 
-**File organizer** handles files already on your computer. Scan a folder or data drive, choose rules, and review a table of original and proposed paths. Exclude individual files before applying the batch. Plans and operation records stay available after restarting the app.
+**File organizer** handles files already on your computer. Pick a folder, choose **No AI** or **With AI**, and review the groups Relay proposes. It can create folders inside the chosen location, move files, and clean up episode names. Exclude groups or individual files before applying. Plans and operation records stay available after restarting the app.
 
 **Workflows** handles repeatable steps: filter a file, move or rename it, extract text, ask a model, and write the result. Connect the blocks, test with one file, then run manually or watch a folder for arrivals.
 
 ### What is already working
 
-- **Drive and folder scans** — inspect existing personal files recursively, with exclusions and category totals. System folders, links, dot paths, and recognized code projects are skipped.
+- **General organization** — combine TV episodes with subtitles, group pictures and screenshots, and file documents, audio, archives, and installers in one plan. Photos can share a folder when their names or small image thumbnails look alike.
+- **No AI or With AI** — both modes start with the local plan. With AI, a connected model can improve supported document topics and names using extracted text. Other proposals remain local.
+- **Choose placement** — create folders inside the source, in a new subfolder, or in another chosen folder.
+- **Broader goals** — combine folders into one chosen library, review duplicates and large old files together, or prepare selected files to share with private-looking names held back for review.
+- **Drive and folder scans** — inspect personal files recursively, with exclusions and category totals. System folders, links, dot paths, and recognized code projects are skipped. Large scans can be reviewed in sections and continued from saved pending folders.
 - **Batch review** — inspect source and destination paths, reasons, name conflicts, selected size, and individual file states before making changes.
-- **Nine no-AI templates** — drive organization, downloads cleanup, renaming, duplicate review, photo filing, archives, delivery preparation, storage review, and backup checks.
-- **Seven AI templates** — document filing, receipt records, meeting notes, research notes, screenshot filing, topic grouping, and filing advice.
+- **Specialized tools** — drive organization, downloads cleanup, renaming, duplicate review, photo filing, archives, storage review, backup checks, and seven AI document tools remain available under Specialized tools.
 - **Local document reading** — text, DOCX, PDF, and English OCR for images or scanned PDF pages. Review generated content before writing it.
 - **Saved setups and scheduled reviews** — reuse folder rules or have Relay prepare reviews at an interval while it is open.
 - **Saved batch records** — keep plans locally, cancel between operations, and undo verified changes as a batch.
@@ -65,15 +70,15 @@
 
 Run the source below or get a published Windows installer from [Releases](https://github.com/Yaqoubj/Relay-Studio/releases/latest). The installer is unsigned, so Windows may show a SmartScreen warning.
 
-Start with **File organizer → Organize my drive**:
+Start with **File organizer → Organize this location**:
 
-1. Browse to a personal folder and choose a separate destination.
-2. Leave **Copy** selected to keep the originals, or choose **Move**.
+1. Browse to a personal folder such as Downloads. Relay proposes new folders inside it by default.
+2. Choose **No AI** or **With AI**. The latter uses the model connected in AI connections.
 3. Scan the files, then **Build review**.
-4. Inspect both paths. Uncheck anything you want left alone, acknowledge the review, and apply the selected changes.
-5. Open the saved batch and use **Undo batch** to reverse unchanged copies or moves. Created folders remain.
+4. Inspect the proposed groups and paths. Skip groups or files you want left alone, acknowledge the review, and apply.
+5. Use **Undo batch** to restore unchanged files. Relay removes the folders it created when they are empty.
 
-For whole-drive scans, select the drive root. Relay skips protected locations rather than rearranging the operating system. A scan stops at 50,000 files or 200,000 inspected entries; an incomplete scan cannot be applied. Scan smaller folders when needed. Put a `.relay-preserve` marker file in a folder to keep its entire tree untouched.
+For drive scans, select a personal data drive. Relay skips protected locations. A scan pauses after a fully scanned folder when it reaches about 50,000 files or 200,000 entries. The general organizer can review that completed section; **Continue scan** then works through pending folders. An unusually large single directory can exceed a section limit. Put a `.relay-preserve` marker file in a folder to keep its entire tree untouched.
 
 The template library separates tools that need AI from those that do not:
 
@@ -115,7 +120,7 @@ Folder watching starts paused after every app restart and only runs while Relay 
 
 ## Choose your own AI
 
-The no-AI templates need no model, API key, account, or server. AI templates use your configured provider.
+No AI mode needs no model, API key, account, or server. With AI mode and AI tools use your configured provider. ChatGPT Plus does not provide general API usage for this app; a cloud API key is billed separately. You can also run Ollama locally.
 
 For private local processing, install [Ollama](https://ollama.com), download a model, and enter its exact name under **AI connections**. Relay only accepts loopback addresses for Ollama.
 
@@ -123,7 +128,7 @@ For a cloud model, enter an OpenAI-compatible HTTPS base URL, model name, and yo
 
 AI can return normal text or named fields such as `{{ai.company}}`. It cannot execute commands or access the filesystem. Only the action blocks already connected in the workflow can change files.
 
-Collection analysis shows the provider and request limit before sending text. You set allowed categories, a confidence threshold, maximum files/requests (up to 100), and characters per file (up to 60,000). A batch also caps sent text at one million characters. These are usage limits, not a dollar-price guarantee. Cached results are reused for matching content, model, and instructions. Low-confidence suggestions are excluded from application.
+Collection analysis shows the provider and request limit before sending text. With AI mode analyzes supported documents only; it does not ask the model to interpret photos. Local thumbnail comparison groups visually similar pictures for your review. It keeps local proposals when a model suggestion is uncertain or unavailable. You set a confidence threshold, maximum files/requests (up to 100), and characters per file (up to 60,000). A batch also caps sent text at one million characters. These are usage limits, not a dollar-price guarantee. Cached valid results are reused for matching content, model, and instructions.
 
 OCR runs locally with a bundled English model; no separate service or runtime model download is needed. Extraction accepts files up to 25 MB and PDFs up to 20 pages. Generated notes are drafts to verify against the source. Screenshot filing reads text, not visual subjects in photos.
 

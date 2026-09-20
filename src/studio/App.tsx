@@ -540,7 +540,7 @@ export function App() {
             <ArrowRight size={14} />
           </button>
           <div className="version">
-            RELAY STUDIO <span>v1.3.0</span>
+            RELAY STUDIO <span>v1.4.0</span>
           </div>
         </div>
       </aside>

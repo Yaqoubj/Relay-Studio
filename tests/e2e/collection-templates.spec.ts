@@ -46,6 +46,7 @@ test('duplicate review, saved schedules, backup comparison and AI draft review w
   try {
     const page = await app.firstWindow();
     await page.getByRole('button', { name: 'File organizer', exact: true }).click();
+    await page.getByLabel('Organizer template').selectOption('duplicates');
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = (async () => ({
         response: 1,

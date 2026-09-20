@@ -3,6 +3,7 @@ import { createReadStream, constants } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { safeName } from './validation';
+import { planSmart } from './smart-organizer';
 import { fileCategories, organizerTemplates } from '../shared/organizer';
 import {
   analyzeCollection,
@@ -44,6 +45,7 @@ const protectedNames = new Set([
   'dev',
   'etc',
 ]);
+if (process.platform === 'win32') protectedNames.delete('library');
 const projectMarkers = [
   '.git',
   '.svn',
@@ -128,6 +130,7 @@ export async function scanFiles(
   options: ScanOptions,
   signal: AbortSignal,
   progress: (p: OrganizerProgress) => void,
+  resume?: ScanResult,
 ): Promise<ScanResult> {
   if (
     !options ||
@@ -145,6 +148,15 @@ export async function scanFiles(
       'System and application folders cannot be scanned for organization. Choose a personal folder or data drive.',
     );
   if (!(await fs.stat(root)).isDirectory()) throw new Error('Choose a folder.');
+  if (
+    resume &&
+    (resume.status !== 'limited' ||
+      resume.root !== root ||
+      JSON.stringify(resume.options) !== JSON.stringify({ ...options, root }) ||
+      !Array.isArray(resume.pendingFolders) ||
+      !resume.pendingFolders.length)
+  )
+    throw new Error('The saved scan cannot be continued with these settings. Start a new scan.');
   const scan: ScanResult = {
     version: 1,
     id: randomUUID(),
@@ -157,7 +169,7 @@ export async function scanFiles(
     warnings: [],
     status: 'complete',
   };
-  const pending = [root];
+  const pending = resume ? [...resume.pendingFolders!] : [root];
   const warn = (message: string) => {
     scan.skipped++;
     if (scan.warnings.length < 100) scan.warnings.push(message);
@@ -186,10 +198,7 @@ export async function scanFiles(
           break;
         }
         const full = path.join(folder, entry.name);
-        if (++visited > 200000 || scan.files.length >= 50000) {
-          scan.status = 'limited';
-          break;
-        }
+        visited++;
         if (
           entry.isSymbolicLink() ||
           protectedPath(full) ||
@@ -227,8 +236,15 @@ export async function scanFiles(
       warn(`${folder}: ${(e as Error).message}`);
     }
     progress({ stage: 'Scanning', count: scan.files.length, path: folder });
+    if (
+      scan.status === 'complete' &&
+      pending.length &&
+      (visited >= 200000 || scan.files.length >= 50000)
+    )
+      scan.status = 'limited';
     if (scan.status !== 'complete') break;
   }
+  if (pending.length) scan.pendingFolders = pending;
   scan.files.sort((a, b) => a.relative.localeCompare(b.relative));
   return scan;
 }
@@ -251,15 +267,45 @@ export async function buildPlan(
     options.exclude.some((p) => typeof p !== 'string' || !path.isAbsolute(p))
   )
     throw new Error('Invalid organization rules.');
-  if (scan.status !== 'complete')
+  if (
+    ['smart', 'smart-ai', 'combine'].includes(options.template) &&
+    ((options.placement !== undefined &&
+      !['inside', 'subfolder', 'elsewhere'].includes(options.placement)) ||
+      (options.renameSmart !== undefined && typeof options.renameSmart !== 'boolean') ||
+      (options.template === 'smart-ai' &&
+        (!Number.isFinite(options.maxAIRequests) ||
+          (options.maxAIRequests ?? 0) < 1 ||
+          (options.maxAIRequests ?? 0) > 100 ||
+          !Number.isFinite(options.maxCharacters) ||
+          (options.maxCharacters ?? 0) < 500 ||
+          (options.maxCharacters ?? 0) > 60000 ||
+          !Number.isFinite(options.minConfidence) ||
+          (options.minConfidence ?? -1) < 0 ||
+          (options.minConfidence ?? 2) > 1)))
+  )
+    throw new Error('Choose valid smart organization and AI limits.');
+  if (
+    scan.status !== 'complete' &&
+    !(scan.status === 'limited' && ['smart', 'smart-ai', 'combine'].includes(options.template))
+  )
     throw new Error(
       'Finish a complete scan before creating a plan. Choose a smaller folder if the scan reached its limit.',
     );
-  const destination =
-    options.template === 'rename' ? scan.root : await fs.realpath(options.destination);
-  await checkPath(destination);
+  const smart = ['smart', 'smart-ai', 'combine'].includes(options.template);
+  const destination = smart
+    ? options.placement === 'elsewhere'
+      ? await fs.realpath(options.destination)
+      : options.placement === 'subfolder'
+        ? path.join(scan.root, safeName(options.subfolderName?.trim() || 'Organized'))
+        : scan.root
+    : options.template === 'rename'
+      ? scan.root
+      : await fs.realpath(options.destination);
+  await checkPath(destination, smart && options.placement === 'subfolder');
   if (protectedPath(destination)) throw new Error('Choose a personal output folder.');
-  if (options.template !== 'rename' && within(destination, scan.root))
+  if (smart && options.placement === 'elsewhere' && within(destination, scan.root))
+    throw new Error('Choose an output folder outside the source and its parents.');
+  if (!smart && options.template !== 'rename' && within(destination, scan.root))
     throw new Error('Choose a separate output folder, not the input folder or one of its parents.');
   const plan: OrganizationPlan = {
     version: 1,
@@ -271,7 +317,7 @@ export async function buildPlan(
       ...options,
       destination,
       operation:
-        options.template === 'rename'
+        smart || options.template === 'rename'
           ? 'move'
           : [
                 'delivery',
@@ -287,11 +333,15 @@ export async function buildPlan(
     items: [],
     status: 'review',
   };
+  if (scan.status === 'limited')
+    plan.notes = [
+      `Partial scan: this review covers ${scan.files.length.toLocaleString()} files. ${scan.pendingFolders?.length || 0} folders remain. Continue the scan after reviewing this batch.`,
+    ];
   const candidates = scan.files.filter(
     (file) =>
       options.categories.includes(file.category) &&
       !options.exclude.some((p) => within(p, file.path)) &&
-      (options.template === 'rename' || !within(destination, file.path)),
+      (smart || options.template === 'rename' || !within(destination, file.path)),
   );
   let number = 0;
   for (const file of ['drive', 'downloads', 'rename'].includes(options.template)
@@ -349,7 +399,38 @@ export async function buildPlan(
     };
     plan.items.push(item);
   }
-  if (!['drive', 'downloads', 'rename'].includes(options.template))
+  if (smart) await planSmart(plan, candidates, signal, services);
+  else if (options.template === 'cleanup') {
+    const duplicatePlan: OrganizationPlan = {
+      ...plan,
+      options: { ...plan.options, template: 'duplicates' },
+      items: [],
+      notes: [],
+    };
+    await analyzeCollection(duplicatePlan, candidates, signal, services);
+    const duplicateSources = new Set(duplicatePlan.items.map((item) => key(item.source)));
+    const keepers = new Set(
+      duplicatePlan.items.flatMap((item) => (item.keeper ? [key(item.keeper.path)] : [])),
+    );
+    const storagePlan: OrganizationPlan = {
+      ...plan,
+      options: { ...plan.options, template: 'storage' },
+      items: [],
+      notes: [],
+    };
+    await analyzeCollection(
+      storagePlan,
+      candidates.filter(
+        (file) => !duplicateSources.has(key(file.path)) && !keepers.has(key(file.path)),
+      ),
+      signal,
+      services,
+    );
+    for (const item of duplicatePlan.items) item.group = 'Exact duplicates';
+    for (const item of storagePlan.items) item.group = 'Large old files';
+    plan.items.push(...duplicatePlan.items, ...storagePlan.items);
+    plan.notes = [...(duplicatePlan.notes || []), ...(storagePlan.notes || [])];
+  } else if (!['drive', 'downloads', 'rename'].includes(options.template))
     await analyzeCollection(plan, candidates, signal, services);
   updateDeliveryManifest(plan);
   const targets = new Map<string, (typeof plan.items)[number]>();
@@ -398,6 +479,26 @@ async function verifyKeeper(item: OrganizationPlan['items'][number], signal: Abo
   await verifySource({ source: item.keeper.path, stamp: item.keeper.stamp });
 }
 type Save = (plan: OrganizationPlan, item?: OrganizationPlan['items'][number]) => void;
+async function makeTrackedFolders(folder: string, plan: OrganizationPlan, save: Save) {
+  const missing: string[] = [];
+  let current = folder;
+  while (!(await exists(current))) {
+    missing.push(current);
+    const parent = path.dirname(current);
+    if (parent === current) throw new Error('Cannot create the destination root.');
+    current = parent;
+  }
+  for (const target of missing.reverse()) {
+    await checkPath(target, true);
+    try {
+      await fs.mkdir(target);
+      (plan.createdFolders ||= []).push(target);
+      save(plan);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+  }
+}
 export async function applyPlan(
   plan: OrganizationPlan,
   signal: AbortSignal,
@@ -446,7 +547,7 @@ export async function applyPlan(
         await verifySource(item);
         signal.throwIfAborted();
         await checkPath(item.destination, true);
-        await fs.mkdir(path.dirname(item.destination), { recursive: true });
+        await makeTrackedFolders(path.dirname(item.destination), plan, save);
         await checkPath(item.destination, true);
         if (await exists(item.destination))
           throw new Error('Destination appeared after review. Nothing was overwritten.');
@@ -544,6 +645,17 @@ export async function undoPlan(
       item.state = 'undone';
       save(plan, item);
       count++;
+    }
+    for (const folder of [...new Set(plan.createdFolders || [])].reverse()) {
+      try {
+        await checkPath(folder);
+        await fs.rmdir(folder);
+      } catch (error) {
+        if (
+          !['ENOTEMPTY', 'EEXIST', 'ENOENT'].includes((error as NodeJS.ErrnoException).code || '')
+        )
+          throw error;
+      }
     }
     plan.status = 'undone';
   } catch (e) {

@@ -19,6 +19,7 @@ test('organizer reviews selected changes, restores saved plans, applies and undo
   try {
     let page = await app.firstWindow();
     await page.getByRole('button', { name: 'File organizer', exact: true }).click();
+    await page.getByLabel('Organizer template').selectOption('drive');
     await app.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = (async () => ({
         canceled: false,
@@ -78,8 +79,9 @@ test('organizer reviews selected changes, restores saved plans, applies and undo
     await page.getByRole('button', { name: 'Templates', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'No AI needed', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AI powered', exact: true })).toBeVisible();
-    await expect(page.locator('.organization-template')).toHaveCount(16);
+    await expect(page.locator('.organization-template')).toHaveCount(20);
     if (process.env.RELAY_UPDATE_SCREENSHOTS) await page.screenshot({ path: 'docs/templates.png' });
+    await page.locator('details.organization-presets').first().locator('summary').click();
     await page.locator('.organization-template').filter({ hasText: 'Bulk rename' }).click();
     await expect(page.getByLabel('Name pattern')).toBeVisible();
     await page.getByLabel('Name pattern').fill('{{number}}-{{stem}}{{ext}}');
