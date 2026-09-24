@@ -1,6 +1,18 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { StudioAPI } from '../shared/types';
 const api: StudioAPI = {
+  toolboxPick: () => ipcRenderer.invoke('studio:toolbox-pick'),
+  toolboxDropped: (files) => ipcRenderer.invoke('studio:toolbox-grant', files.map((file) => webUtils.getPathForFile(file)).filter(Boolean)),
+  toolboxRun: (input) => ipcRenderer.invoke('studio:toolbox-run', input),
+  toolboxHistory: () => ipcRenderer.invoke('studio:toolbox-history'),
+  toolboxPreview: (file) => ipcRenderer.invoke('studio:toolbox-preview', file),
+  toolboxOpen: (file, reveal) => ipcRenderer.invoke('studio:toolbox-open', file, reveal),
+  toolboxCopy: (value) => ipcRenderer.invoke('studio:toolbox-copy', value),
+  onToolboxProgress: (callback) => {
+    const listener = (_event: unknown, progress: Parameters<typeof callback>[0]) => callback(progress);
+    ipcRenderer.on('studio:toolbox-progress', listener);
+    return () => ipcRenderer.removeListener('studio:toolbox-progress', listener);
+  },
   organizerState: () => ipcRenderer.invoke('studio:organizer-state'),
   onOrganizerProgress: (callback) => {
     const listener = (_event: unknown, progress: Parameters<typeof callback>[0]) =>

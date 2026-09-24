@@ -4,10 +4,10 @@
 
 <h1 align="center">Relay Studio</h1>
 
-<p align="center"><strong>Organize existing files. Automate the ones that arrive next.</strong></p>
+<p align="center"><strong>Useful desktop tools, with file organization and automation when you need them.</strong></p>
 
 <p align="center">
-  Pick a messy folder, review Relay's suggested groups and names, then apply the changes. Use visual workflows for recurring tasks and optional AI.
+  Resize pictures, work with PDFs, extract text, and clean up files from one desktop app. No account or AI connection is needed for the everyday tools.
 </p>
 
 <p align="center">
@@ -22,13 +22,25 @@
   · <a href="docs/architecture.md">Read the architecture</a>
 </p>
 
+![Relay Studio desktop toolbox](docs/toolbox-home.png)
+
+![Resizing a picture in Relay Studio](docs/toolbox-result.png)
+
+## What you can do now
+
+Open **Home** to choose a tool or drop files into Relay. **All tools** includes eight new actions: make pictures smaller, resize or convert pictures, make a PDF from pictures, merge PDFs, save selected PDF pages, extract text from documents or images, and clean pasted text. The app creates new files in **Documents / Relay Results**, keeps the source files, and lets you open each result or show it in its folder. Recent results appear in **Activity**. Text results can be edited and copied.
+
+The file tools are still here: tidy loose files, find exact duplicates, compare a backup, and rename selected files. They open in the existing organizer for review. Smart organization now keeps filenames by default. Relay skips recognized game saves, application folders, and code projects before moving or renaming. These checks are conservative; review a plan before applying it, especially in mixed folders.
+
+The visual workflow editor, saved setups, optional AI connections, and workspace sync remain under **Advanced**. Current Activity records finished toolbox results; it is not a resumable job queue. Other tools described in the [desktop toolbox plan](docs/desktop-toolbox-plan.md), such as capture, clipboard history, and media processing, are still planned.
+
 ![Reviewing a general organization plan in Relay Studio](docs/smart-review.png)
 
 ![Choosing where files should go](docs/smart-setup.png)
 
-## Two ways to work with files
+## File organization and workflows
 
-**File organizer** handles files already on your computer. Pick a folder, choose **No AI** or **With AI**, and review the groups Relay proposes. It can create folders inside the chosen location, move files, and clean up episode names. Exclude groups or individual files before applying. Plans and operation records stay available after restarting the app.
+**File organizer** handles files already on your computer. Pick a folder, choose **No AI** or **With AI**, and review the groups Relay proposes. It can create folders inside the chosen location and move files. Renaming is optional; names stay as they are by default. Exclude groups or individual files before applying. Plans and operation records stay available after restarting the app.
 
 **Workflows** handles repeatable steps: filter a file, move or rename it, extract text, ask a model, and write the result. Connect the blocks, test with one file, then run manually or watch a folder for arrivals.
 

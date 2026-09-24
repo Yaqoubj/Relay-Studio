@@ -1,0 +1,30 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { assertSafeToReorganize, isManagedDirectory } from '../src/desktop/file-policy';
+import { scanFiles } from '../src/desktop/organizer';
+
+test('personal documents stay eligible while game and portable app data stays intact', async (t) => {
+  const root = await fs.mkdtemp(path.join(process.cwd(), 'relay-policy-test-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const source = path.join(root, 'Downloads');
+  const saves = path.join(source, 'Saved Games', 'Example');
+  const portable = path.join(source, 'Portable App');
+  await fs.mkdir(saves, { recursive: true });
+  await fs.mkdir(portable);
+  const ordinary = path.join(source, 'letter.txt');
+  const companion = path.join(saves, 'thumbnail.png');
+  await fs.writeFile(ordinary, 'hello');
+  await fs.writeFile(companion, 'picture');
+  await fs.writeFile(path.join(saves, 'slot.sav'), 'save');
+  await fs.writeFile(path.join(portable, 'program.exe'), 'app');
+  await fs.writeFile(path.join(portable, 'support.dll'), 'dependency');
+  await fs.writeFile(path.join(portable, 'notes.txt'), 'related');
+  assert.equal(await isManagedDirectory(portable), true);
+  await assertSafeToReorganize(ordinary);
+  await assert.rejects(assertSafeToReorganize(companion), /application or game data|project, application, or game/);
+  await assert.rejects(assertSafeToReorganize(path.join(portable, 'notes.txt')), /application|game/);
+  const scanned = await scanFiles({ root: source, recursive: true, exclude: [] }, new AbortController().signal, () => {});
+  assert.deepEqual(scanned.files.map((file) => path.basename(file.path)), ['letter.txt']);
+});

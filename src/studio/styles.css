@@ -85,6 +85,8 @@ button svg {
 .sidebar {
   width: 222px;
   flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
   background: #15171c;
   border-right: 1px solid #2a2c34;
   padding: 27px 15px 16px;
@@ -209,7 +211,7 @@ button svg {
   color: #a4a1af;
 }
 .workflow-links {
-  overflow-y: auto;
+  flex-shrink: 0;
 }
 .workflow-link {
   display: flex;

@@ -16,6 +16,7 @@ test('organize existing folder previews and processes nested files', async () =>
   });
   try {
     const page = await app.firstWindow();
+    await page.getByRole('button', { name: /^Workflows/ }).click();
     await page.getByLabel('Workflow name').waitFor();
     await app.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = (async () => ({
@@ -146,6 +147,7 @@ test('desktop workflow: configure, preview, run, undo, watch, and persist', asyn
     const page = await app.firstWindow();
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    await page.getByRole('button', { name: /^Workflows/ }).click();
     await expect(page.getByLabel('Workflow name')).toHaveValue('Document digest');
     await page.getByRole('button', { name: 'Download organizer', exact: true }).click();
     await expect(page.getByLabel('Workflow name')).toHaveValue('Download organizer');

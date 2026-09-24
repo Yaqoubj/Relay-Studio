@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Workflow, Run, Config, Effect } from '../shared/types';
 import { safeName, validateRunnable } from './validation';
+import { assertSafeToReorganize } from './file-policy';
 type Context = {
   file: string;
   physical: string;
@@ -217,6 +218,8 @@ export async function execute(
                 };
               } else {
                 await regular(ctx.physical);
+                if (kind === 'move' || kind === 'rename')
+                  await assertSafeToReorganize(ctx.physical);
                 const hash = await digest(ctx.physical);
                 await fs.copyFile(ctx.physical, destination, constants.COPYFILE_EXCL);
                 // Journal the copied file before removing the source.

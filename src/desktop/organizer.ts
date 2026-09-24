@@ -3,6 +3,7 @@ import { createReadStream, constants } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { safeName } from './validation';
+import { assertSafeToReorganize, hasManagedExtension, hasManagedName, isManagedDirectory } from './file-policy';
 import { planSmart } from './smart-organizer';
 import { fileCategories, organizerTemplates } from '../shared/organizer';
 import {
@@ -143,7 +144,7 @@ export async function scanFiles(
     throw new Error('Choose a folder and valid exclusions.');
   await checkPath(options.root);
   const root = await fs.realpath(options.root);
-  if (protectedPath(root))
+  if (protectedPath(root) || hasManagedName(root) || await isManagedDirectory(root))
     throw new Error(
       'System and application folders cannot be scanned for organization. Choose a personal folder or data drive.',
     );
@@ -187,8 +188,8 @@ export async function scanFiles(
     }
     try {
       await checkPath(folder);
-      if (await isProject(folder)) {
-        warn(`Project preserved: ${folder}`);
+      if (await isProject(folder) || await isManagedDirectory(folder)) {
+        warn(`Application, game, or project folder preserved: ${folder}`);
         continue;
       }
       const dir = await fs.opendir(folder);
@@ -212,6 +213,10 @@ export async function scanFiles(
           continue;
         }
         if (!entry.isFile()) continue;
+        if (hasManagedExtension(full)) {
+          warn(`Application or game data preserved: ${full}`);
+          continue;
+        }
         try {
           const stat = await fs.lstat(full);
           if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink > 1) {
@@ -516,6 +521,8 @@ export async function applyPlan(
     let checked = 0;
     for (const item of items) {
       signal.throwIfAborted();
+      if ((item.action || plan.options.operation) === 'move')
+        await assertSafeToReorganize(item.source);
       await verifySource(item);
       if (item.sourceHash && (await hashFile(item.source, signal)) !== item.sourceHash)
         throw new Error('Source contents changed since analysis. Build a fresh review.');
@@ -534,6 +541,8 @@ export async function applyPlan(
       progress({ stage: 'Applying changes', count, total: items.length, path: item.source });
       try {
         await verifySource(item);
+        if ((item.action || plan.options.operation) === 'move')
+          await assertSafeToReorganize(item.source);
         const sourceHash = await hashFile(item.source, signal);
         if (item.sourceHash && sourceHash !== item.sourceHash)
           throw new Error('Source contents changed since analysis. Build a fresh review.');

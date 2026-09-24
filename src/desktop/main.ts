@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, safeStorage, shell } from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -12,6 +12,8 @@ import { scanFiles, buildPlan, applyPlan, undoPlan } from './organizer';
 import { updateDeliveryManifest } from './collection-analysis';
 import { needsAI, organizerTemplates, type OrganizerPreset } from '../shared/organizer';
 import { MaintenanceQueue } from './maintenance';
+import { runToolbox, validateToolboxInput } from './toolbox';
+import type { ToolboxInput, ToolboxResult } from '../shared/toolbox';
 import type {
   ScanResult,
   OrganizationPlan,
@@ -637,6 +639,87 @@ else {
       cloud: cloudSnapshot(),
       busy: !!active,
     }));
+    handle('toolbox-pick', async () => {
+      const picked = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] });
+      if (picked.canceled) return [];
+      const result: string[] = [];
+      for (const selected of picked.filePaths.slice(0, 50)) {
+        const file = await fs.realpath(selected);
+        if (!(await fs.lstat(file)).isFile()) continue;
+        files.add(file);
+        result.push(file);
+      }
+      return result;
+    });
+    handle('toolbox-grant', async (paths: string[]) => {
+      if (!Array.isArray(paths) || paths.length > 50 || paths.some((p) => typeof p !== 'string' || !path.isAbsolute(p)))
+        throw new Error('Drop up to 50 regular files.');
+      const result: string[] = [];
+      for (const candidate of paths) {
+        const stat = await fs.lstat(candidate);
+        if (!stat.isFile() || stat.isSymbolicLink()) continue;
+        const file = await fs.realpath(candidate);
+        files.add(file);
+        result.push(file);
+      }
+      return result;
+    });
+    handle('toolbox-history', () => JSON.parse(store.get('toolbox-history') || '[]') as ToolboxResult[]);
+    handle('toolbox-run', async (input: ToolboxInput) => {
+      idle();
+      validateToolboxInput(input);
+      if (input.paths.some((p) => !files.has(p)))
+        throw new Error('Choose or drop the files into Relay first.');
+      const controller = new AbortController();
+      active = controller;
+      update();
+      const outputRoot = process.env.RELAY_TOOLBOX_OUTPUT_DIR || path.join(app.getPath('documents'), 'Relay Results');
+      try {
+        const result = await runToolbox(input, outputRoot, controller.signal, (progress) => {
+          if (win && !win.isDestroyed()) win.webContents.send('studio:toolbox-progress', progress);
+        });
+        const history = JSON.parse(store.get('toolbox-history') || '[]') as ToolboxResult[];
+        store.set('toolbox-history', JSON.stringify([{ ...result, text: undefined }, ...history].slice(0, 30)));
+        for (const output of result.outputs) files.add(output.path);
+        return result;
+      } finally {
+        active = null;
+        if (win && !win.isDestroyed()) win.webContents.send('studio:toolbox-progress', null);
+        update();
+        if (closeAfterRun) {
+          closeAfterRun = false;
+          win.close();
+        } else void drain();
+      }
+    });
+    handle('toolbox-preview', async (file: string) => {
+      if (typeof file !== 'string' || !files.has(file)) throw new Error('Choose an image first.');
+      const stat = await fs.lstat(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 25 * 1024 * 1024)
+        throw new Error('This picture is too large to preview.');
+      const { createCanvas, loadImage } = await import('@napi-rs/canvas');
+      const image = await loadImage(file);
+      if (image.width * image.height > 60_000_000) throw new Error('This picture is too large to preview.');
+      const scale = Math.min(1, 420 / Math.max(image.width, image.height));
+      const canvas = createCanvas(Math.max(1, Math.round(image.width * scale)), Math.max(1, Math.round(image.height * scale)));
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/png');
+    });
+    handle('toolbox-open', async (file: string, reveal: boolean) => {
+      if (typeof file !== 'string' || typeof reveal !== 'boolean') throw new Error('Choose a result.');
+      const history = JSON.parse(store.get('toolbox-history') || '[]') as ToolboxResult[];
+      if (!history.some((entry) => entry.outputs.some((output) => output.path === file)))
+        throw new Error('This is not a recorded result.');
+      if (reveal) shell.showItemInFolder(file);
+      else {
+        const error = await shell.openPath(file);
+        if (error) throw new Error(error);
+      }
+    });
+    handle('toolbox-copy', (value: string) => {
+      if (typeof value !== 'string' || value.length > 500000) throw new Error('Text is too long to copy.');
+      clipboard.writeText(value);
+    });
     handle('save', async (w: Workflow) => {
       idle();
       validateWorkflow(w);

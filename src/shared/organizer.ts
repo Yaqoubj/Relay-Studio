@@ -322,7 +322,7 @@ export function organizerDefaults(template: OrganizerTemplate): PlanOptions {
     ocr: true,
     placement: template === 'combine' ? 'elsewhere' : 'inside',
     subfolderName: 'Organized',
-    renameSmart: true,
+    renameSmart: false,
   };
 }
 export const fileCategories: FileCategory[] = [

@@ -1,7 +1,7 @@
 {
   "name": "relay-studio",
-  "version": "1.4.0",
-  "description": "Local-first visual automation for desktop files and optional AI",
+  "version": "1.5.0",
+  "description": "Desktop toolbox for pictures, PDFs, text, files, and visual workflows",
   "main": "build/main.cjs",
   "author": "Yaqoubj",
   "license": "MIT",
@@ -61,10 +61,10 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.9",
     "@fastify/cors": "^11.3.0",
     "@fastify/jwt": "^10.2.2",
     "@fastify/sensible": "^6.0.5",
+    "@napi-rs/canvas": "^1.0.9",
     "@tesseract.js-data/eng": "^1.0.0",
     "@xyflow/react": "^12.11.6",
     "chokidar": "^5.0.0",
@@ -72,6 +72,7 @@
     "fastify": "^5.12.5",
     "lucide-react": "^1.47.0",
     "mammoth": "^1.12.3",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

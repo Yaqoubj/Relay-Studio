@@ -1,5 +1,17 @@
 # Five-minute demo
 
+## Try the desktop toolbox first
+
+1. On **Home**, choose **All tools → Resize pictures**. Select a test picture and set a smaller width.
+2. Choose **Create result**. Compare the source and result previews, then use **Open** or **Folder**. The source stays in place; the new picture is in `Documents/Relay Results/image-resize`.
+3. Choose **All tools → Create a PDF from pictures**, select two or three pictures, change their order with the arrow buttons, and create the PDF.
+4. Try **Get text from a file** with a PDF or picture. The result is editable text you can copy. Scanned pictures use the bundled English OCR model.
+5. Open **Activity** to find the files from finished tools.
+
+![Desktop toolbox](toolbox-home.png)
+
+![Picture result](toolbox-result.png)
+
 ## Organize an existing collection
 
 1. Make a personal test folder containing a PDF, three pictures named `Trip-001.jpg` through `Trip-003.jpg`, and a video named `Show.S01E02.mkv`.
@@ -17,7 +29,7 @@ Switch to **Organize with AI** to let your connected model improve document topi
 ## Automate new arrivals
 
 1. Create two temporary folders, `Inbox` and `Archive`, and put a sample PDF in `Inbox`.
-2. Open **Download organizer**. Select **A download arrives** and choose `Inbox` with the folder picker.
+2. Open **Workflows → Download organizer** under Advanced. Select **A download arrives** and choose `Inbox` with the folder picker.
 3. Select **Move to my archive** and choose `Archive`. Save the workflow.
 4. Choose **Test workflow**, select the sample PDF, and **Preview workflow**. Expand a step in Executions to inspect its planned output. Both folders remain unchanged.
 5. Choose **Test workflow → Run workflow**. The PDF moves to `Archive` and gains a date prefix.

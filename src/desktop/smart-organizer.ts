@@ -129,7 +129,7 @@ function episodeInfo(file: ScannedFile) {
   const match = parsed.name.match(episode);
   if (
     !match ||
-    (!['Videos', 'Other'].includes(file.category) && !mediaSidecar.has(parsed.ext.toLowerCase()))
+    (file.category !== 'Videos' && !mediaSidecar.has(parsed.ext.toLowerCase()))
   )
     return null;
   const show = cleanTitle(match[1]);

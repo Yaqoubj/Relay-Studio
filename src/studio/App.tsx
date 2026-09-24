@@ -69,6 +69,7 @@ import type {
 } from '../shared/types';
 import { blankWorkflow, catalog, templates } from '../shared/catalog';
 import { Organizer, OrganizerCards } from './Organizer';
+import { Toolbox } from './Toolbox';
 import type { OrganizerTemplate } from '../shared/organizer';
 const icons = {
   trigger: FolderInput,
@@ -208,8 +209,8 @@ export function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [page, setPage] = useState<
-    'editor' | 'templates' | 'history' | 'connections' | 'cloud' | 'organizer'
-  >('editor');
+    'home' | 'tools' | 'activity' | 'editor' | 'templates' | 'history' | 'connections' | 'cloud' | 'organizer'
+  >('home');
   const [organizerTemplate, setOrganizerTemplate] = useState<OrganizerTemplate>();
   const [selected, setSelected] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false),
@@ -440,7 +441,11 @@ export function App() {
           </div>
           <ChevronDown size={13} />
         </div>
-        <div className="nav-label">BUILD & MANAGE</div>
+        <div className="nav-label">EVERYDAY TOOLS</div>
+        <button className={`nav-item ${page === 'home' ? 'active' : ''}`} onClick={() => setPage('home')}><LayoutGrid size={17} />Home</button>
+        <button className={`nav-item ${page === 'tools' ? 'active' : ''}`} onClick={() => setPage('tools')}><Search size={17} />All tools</button>
+        <button className={`nav-item ${page === 'activity' ? 'active' : ''}`} onClick={() => setPage('activity')}><Activity size={17} />Activity</button>
+        <div className="nav-label" style={{ marginTop: 20 }}>ADVANCED</div>
         <button
           className={`nav-item ${page === 'organizer' ? 'active' : ''}`}
           onClick={() => {
@@ -550,7 +555,13 @@ export function App() {
             <span>Personal workspace</span>
             <ChevronRight size={13} />
             <strong>
-              {page === 'organizer'
+              {page === 'home'
+                ? 'Home'
+                : page === 'tools'
+                  ? 'All tools'
+                  : page === 'activity'
+                    ? 'Activity'
+                    : page === 'organizer'
                 ? 'File organizer'
                 : page === 'editor'
                   ? 'Workflows'
@@ -1092,6 +1103,7 @@ export function App() {
           </div>
         ) : null}
         {page === 'organizer' && <Organizer initialTemplate={organizerTemplate} busy={busy} />}
+        {(['home', 'tools', 'activity'] as const).includes(page as 'home' | 'tools' | 'activity') && <Toolbox view={page as 'home' | 'tools' | 'activity'} openOrganizer={(template) => { setOrganizerTemplate(template); setPage('organizer'); }} />}
         {page === 'templates' && (
           <div className="page-content">
             <div className="page-eyebrow">READY TO USE</div>

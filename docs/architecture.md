@@ -1,6 +1,14 @@
 # Architecture and tradeoffs
 
-Relay Studio is a local desktop workflow engine with a visual editor. React Flow supplies the canvas; it does not execute workflows. The application owns the graph format, runtime, permissions, persistence, and recovery behavior.
+Relay Studio is a local desktop toolbox with a retained visual workflow editor. React Flow supplies the advanced canvas; it does not execute workflows. The application owns the graph format, runtime, permissions, persistence, and recovery behavior.
+
+## Everyday toolbox
+
+`src/studio/Toolbox.tsx` shows Home, the tool catalog, tool-specific inputs/results, and recent finished results. Tool IDs and accepted input kinds live in `src/shared/toolbox.ts`. The sandboxed preload bridge converts file-picker and drop inputs to local paths; `src/desktop/main.ts` grants those paths for the session and dispatches validated actions to `src/desktop/toolbox.ts`. The renderer does not receive arbitrary filesystem APIs.
+
+The first eight actions use `@napi-rs/canvas` for picture outputs, `pdf-lib` for PDF creation/merge/page extraction, and the existing document extractor for text and English OCR. Outputs use exclusive file creation in `Documents/Relay Results/<tool>` with numbered collision names; input files are not modified. Per-file errors appear beside successful results. Recent result metadata is kept locally (up to 30 entries), but current toolbox runs are not durable queued jobs and are not automatically resumed after a crash. Picture metadata may be lost during re-encoding; transparent inputs are flattened onto white only for JPG output.
+
+`src/desktop/file-policy.ts` centralizes the new conservative check for known game/application names, save extensions, and directory markers. The organizer scan skips recognized trees; organizer apply and graph file mutations check sources again before changing them. This is a guardrail, not a universal detector of every application-managed folder. Smart organization keeps original filenames unless renaming is chosen, and episode detection requires a media file or sidecar rather than a matching filename alone.
 
 ## Boundaries
 

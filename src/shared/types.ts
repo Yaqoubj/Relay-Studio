@@ -78,6 +78,14 @@ export type CloudSettings = {
   workspaceId?: string;
 };
 export interface StudioAPI {
+  toolboxPick(): Promise<string[]>;
+  toolboxDropped(files: File[]): Promise<string[]>;
+  toolboxRun(input: import('./toolbox').ToolboxInput): Promise<import('./toolbox').ToolboxResult>;
+  toolboxHistory(): Promise<import('./toolbox').ToolboxResult[]>;
+  toolboxPreview(file: string): Promise<string>;
+  toolboxOpen(file: string, reveal: boolean): Promise<void>;
+  toolboxCopy(text: string): Promise<void>;
+  onToolboxProgress(callback: (progress: import('./toolbox').ToolboxProgress | null) => void): () => void;
   organizerState(): Promise<import('./organizer').OrganizerState>;
   onOrganizerProgress(
     callback: (progress: import('./organizer').OrganizerProgress | null) => void,

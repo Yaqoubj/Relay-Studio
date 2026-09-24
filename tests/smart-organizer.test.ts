@@ -81,7 +81,7 @@ test('general organizer can create a new subfolder and AI only improves supporte
     plan.items.some(
       (entry) =>
         entry.destination ===
-        path.join(f.source, 'Sorted', 'Documents', 'Finance', 'Rental agreement.pdf'),
+        path.join(f.source, 'Sorted', 'Documents', 'Finance', 'scan.pdf'),
     ),
   );
   assert.ok(
@@ -94,6 +94,15 @@ test('general organizer can create a new subfolder and AI only improves supporte
   assert.equal(plan.status, 'complete');
   await undoPlan(plan, signal(), noop, noop);
   await assert.rejects(fs.stat(path.join(f.source, 'Sorted')));
+});
+
+test('an unknown file with an episode-like name is not treated as a video', async (t) => {
+  const f = await setup(t);
+  await f.write('My.Game.S01E01.xyz');
+  const plan = await buildPlan(await f.scan(), organizerDefaults('smart'), signal());
+  assert.equal(plan.items.length, 1);
+  assert.equal(plan.items[0].selected, false);
+  assert.equal(plan.items[0].group, 'Other');
 });
 
 test('limited drive scans produce an explicitly partial review and resume remaining folders', async (t) => {

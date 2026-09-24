@@ -11,7 +11,7 @@ const app = await electron.launch({
 });
 try {
   const page = await app.firstWindow();
-  await page.getByLabel('Workflow name').waitFor();
+  await page.getByRole('heading', { name: 'What do you need to do?' }).waitFor();
   assert.equal(await page.title(), 'Relay Studio');
   const result = await app.evaluate(async ({ app }) => {
     const { createRequire } = process.getBuiltinModule('module');
@@ -44,6 +44,11 @@ try {
       const { createWorker } = load('tesseract.js');
       const { langPath } = load('@tesseract.js-data/eng');
       const { createCanvas, loadImage } = load('@napi-rs/canvas');
+      const { PDFDocument } = load('pdf-lib');
+      const createdPdf = await PDFDocument.create();
+      createdPdf.addPage([300, 200]);
+      const savedPdf = await createdPdf.save();
+      const reopenedPdf = await PDFDocument.load(savedPdf);
       const canvas = createCanvas(9, 8);
       canvas.getContext('2d').fillRect(0, 0, 9, 8);
       const decoded = await loadImage(canvas.toBuffer('image/png'));
@@ -66,6 +71,7 @@ try {
           docx: typeof load('mammoth').extractRawText,
           exif: typeof load('exifr').parse,
           image: decoded.width === 9 && decoded.height === 8,
+          pdfWriting: reopenedPdf.getPageCount() === 1,
         };
       } finally {
         clearTimeout(timeout);
@@ -81,8 +87,9 @@ try {
   assert.equal(result.docx, 'function');
   assert.equal(result.exif, 'function');
   assert.equal(result.image, true);
+  assert.equal(result.pdfWriting, true);
   console.log(
-    'Packaged application launches; SQLite, renderer, PDF rendering, offline OCR, DOCX, EXIF and image comparison dependencies work.',
+    'Packaged application launches; renderer, PDF read/write, offline OCR, DOCX, EXIF and image dependencies work.',
   );
 } finally {
   await app.close();
