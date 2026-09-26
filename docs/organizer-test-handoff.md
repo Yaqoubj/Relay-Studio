@@ -1,8 +1,8 @@
 # Organizer validation record
 
-Implementation date: September 26, 2026. Source baseline: `25588d7`. Package target: **1.6.0**.
+Implementation date: September 26, 2026. Package version: **1.0.0**.
 
-The owner authorized implementation of O1–O6 and a general UI redesign. The owner runs the release; source validation and upload are authorized. This record documents the checks completed for version **1.6.0**. No installer, Git tag, or release was created.
+This record documents the implementation and source checks for the first Relay Studio release. No installer, Git tag, or release was created.
 
 The production build and TypeScript check pass. `npm.cmd test` passes **58 tests**. `npm.cmd run test:e2e` passes **7 Electron tests**. Those tests use disposable synthetic files and isolated application data. Screenshots were refreshed from the running desktop app. GitHub prose describes the current app directly. **Do not execute the release script, publish a release/tag, or build an installer.**
 
@@ -114,4 +114,4 @@ The owner can then run:
 powershell -ExecutionPolicy Bypass -File scripts/release.ps1 -Publish
 ```
 
-The script requires a clean committed/pushed checkout, runs tests/build/packaging/smoke checks, verifies assets, and publishes. It has **not** been executed here. Do not create a release, tag, draft, or installer on the owner's behalf. Update the release notes around verified current behavior, without a long comparison with earlier versions.
+The script requires a clean committed/pushed checkout, runs tests/build/packaging/smoke checks, verifies assets, and publishes. It has **not** been executed here. Do not create a release, tag, draft, or installer on the owner's behalf.
