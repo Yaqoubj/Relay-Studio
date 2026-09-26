@@ -11,8 +11,6 @@ Use a disposable personal test folder. Keep fixtures outside this repository and
 5. Use **Keep here** on a collection you want left alone. **Change destination** picks an existing destination. **Remember this choice** teaches only this source/collection combination.
 6. Choose **Organize files**. Inspect the recorded result and optional File details. Use **Open destination**, then **Undo this batch** without editing outputs.
 
-These are intended outcomes to validate, not a report of a completed test run.
-
 ## Remember destinations and handle arrivals
 
 1. Prepare a source and remember a collection destination.
