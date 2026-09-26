@@ -12,11 +12,12 @@ import {
 } from '../src/shared/organizer';
 import { MaintenanceQueue } from '../src/desktop/maintenance';
 import { extractDocument } from '../src/desktop/documents';
+import { createPersonalTemp } from './support/personal-temp';
 
 const signal = () => new AbortController().signal;
 const noop = () => {};
 async function fixture(t: { after(fn: () => Promise<void>): void }) {
-  const base = await fs.mkdtemp(path.join(process.cwd(), 'relay-collection-test-'));
+  const base = await createPersonalTemp('collection-');
   t.after(() => fs.rm(base, { recursive: true, force: true }));
   const root = path.join(base, 'files');
   const destination = path.join(base, 'output');

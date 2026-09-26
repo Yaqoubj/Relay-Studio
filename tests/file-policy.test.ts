@@ -4,9 +4,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { assertSafeToReorganize, isManagedDirectory } from '../src/desktop/file-policy';
 import { scanFiles } from '../src/desktop/organizer';
+import { createPersonalTemp } from './support/personal-temp';
 
 test('personal documents stay eligible while game and portable app data stays intact', async (t) => {
-  const root = await fs.mkdtemp(path.join(process.cwd(), 'relay-policy-test-'));
+  const root = await createPersonalTemp('policy-');
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const source = path.join(root, 'Downloads');
   const saves = path.join(source, 'Saved Games', 'Example');

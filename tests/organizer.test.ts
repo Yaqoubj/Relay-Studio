@@ -5,12 +5,12 @@ import path from 'node:path';
 import { scanFiles, buildPlan, applyPlan, undoPlan } from '../src/desktop/organizer';
 import { Store } from '../src/desktop/database';
 import { fileCategories, type PlanOptions } from '../src/shared/organizer';
+import { createPersonalTemp } from './support/personal-temp';
 
 const signal = () => new AbortController().signal;
 const noop = () => {};
 async function fixture(t: { after(fn: () => Promise<void>): void }) {
-  // Windows' system temp lives under AppData, which is intentionally protected.
-  const base = await fs.mkdtemp(path.join(process.cwd(), 'relay-organizer-test-'));
+  const base = await createPersonalTemp('organizer-');
   t.after(() => fs.rm(base, { recursive: true, force: true }));
   const root = path.join(base, 'personal');
   const destination = path.join(base, 'organized');

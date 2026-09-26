@@ -1,52 +1,47 @@
-# Five-minute demo
+# Try Relay Studio
 
-## Try the desktop toolbox first
+Use a disposable personal test folder. Keep fixtures outside this repository and other code projects: ancestor protection intentionally excludes those trees.
 
-1. On **Home**, choose **All tools → Resize pictures**. Select a test picture and set a smaller width.
-2. Choose **Create result**. Compare the source and result previews, then use **Open** or **Folder**. The source stays in place; the new picture is in `Documents/Relay Results/image-resize`.
-3. Choose **All tools → Create a PDF from pictures**, select two or three pictures, change their order with the arrow buttons, and create the PDF.
-4. Try **Get text from a file** with a PDF or picture. The result is editable text you can copy. Scanned pictures use the bundled English OCR model.
-5. Open **Activity** to find the files from finished tools.
+## Organize a mixed folder
 
-![Desktop toolbox](toolbox-home.png)
+1. Add three supported videos named `Example.S01E01.mkv` through `Example.S01E03.mkv`, with a matching `.en.srt` for one episode. Add a real picture, a text document, and an unfamiliar file extension.
+2. Create `Videos/Example/Season 01` in the same folder. Optionally add a text document containing `Invoice`, `Total`, and sample invoice details.
+3. Open **File organizer → Choose folder**. Preparation starts immediately.
+4. Inspect the collection cards. The episodes and subtitle should reuse the existing season folder. The invoice should propose `Documents/Invoices`. The unfamiliar extension stays under Needs attention. Picture filenames stay the same.
+5. Use **Keep here** on a collection you want left alone. **Change destination** picks an existing destination. **Remember this choice** teaches only this source/collection combination.
+6. Choose **Organize files**. Inspect the recorded result and optional File details. Use **Open destination**, then **Undo this batch** without editing outputs.
 
-![Picture result](toolbox-result.png)
+These are intended outcomes to validate, not a report of a completed test run.
 
-## Organize an existing collection
+## Remember destinations and handle arrivals
 
-1. Make a personal test folder containing a PDF, three pictures named `Trip-001.jpg` through `Trip-003.jpg`, and a video named `Show.S01E02.mkv`.
-2. Open **File organizer → Organize this location**, and browse to that folder. Leave **Create folders inside this location** selected.
-3. **Scan files**, then **Build review**. Expect groups for `Documents`, `Pictures/Trip`, and `Videos/Show/Season 01`.
-4. Uncheck one file. Confirm that no output exists yet, acknowledge the selected changes, and **Apply selected changes**.
-5. Use **Undo batch**. The original files return, and Relay removes folders it created if they are empty.
-6. Select **Bulk rename**, scan again, and try `{{number}}-{{stem}}{{ext}}`. The review shows every proposed name before you apply it.
-7. For a conflict demonstration, place a file at one proposed destination before building a new review. That item is marked conflicting and excluded.
+1. Prepare a source and remember a collection destination.
+2. Apply the manual review before enabling **Keep this location tidy**. Existing files at first enable stay pending for manual review.
+3. Add a different eligible file matching that collection. Leave Relay open. The monitor checks every 15 seconds and requires at least 10 seconds of unchanged file identity/metadata.
+4. Open **Activity** to inspect its batch. An unfamiliar or ambiguous arrival should stay in place.
+5. Use **Filing choices** to edit priority, destination, or enabled state. Pause automatic filing when finished. Undo pauses its source to keep restored files from immediately moving again.
 
-Switch to **Organize with AI** to let your connected model improve document topics and names. Local grouping still runs first. AI uses document text, not visual understanding of photos. Saved plans and batches are accessible at the bottom of the page and survive app restarts.
+## Move a whole personal collection
 
-![General organization review](smart-review.png)
+1. Put a personal course folder inside the source, with videos, PDFs, notes, and an empty subfolder. Avoid application/game/code-project markers for this fixture.
+2. Expand **Whole folder move**, select the course, and choose **Review collection moves**.
+3. Inspect the whole-folder card. The default destination is `Collections/<original folder name>`. To choose a different parent, use **Change destination**.
+4. Apply the review. Verify names, contents, empty folders, and guarded undo. Existing destination collections are held back rather than merged.
 
-## Automate new arrivals
+## Explore a library
 
-1. Create two temporary folders, `Inbox` and `Archive`, and put a sample PDF in `Inbox`.
-2. Open **Workflows → Download organizer** under Advanced. Select **A download arrives** and choose `Inbox` with the folder picker.
-3. Select **Move to my archive** and choose `Archive`. Save the workflow.
-4. Choose **Test workflow**, select the sample PDF, and **Preview workflow**. Expand a step in Executions to inspect its planned output. Both folders remain unchanged.
-5. Choose **Test workflow → Run workflow**. The PDF moves to `Archive` and gains a date prefix.
-6. Choose **Undo files**. The original filename and location are restored, provided the file was not edited.
-7. Enable watching and copy a different PDF into `Inbox`. After the file stabilizes, the workflow runs automatically. Pause watching when done.
-8. Open **Run history** and inspect the manual and watched runs.
+1. Open **Library → Add location** and choose a personal folder or data drive.
+2. Search a filename or readable document phrase. Choose **Show folder**. Save a named search to revisit it without moving files.
+3. Refresh the index after changing the source. Continue pending directory sections when shown.
+4. For an external-drive fixture, disconnect it and reopen Library. Its last index should remain searchable with an offline label.
+5. **Remove index** removes Relay metadata only. It does not delete files.
 
-To organize files that are already present, open the same workflow and choose **Organize existing folder**. Pick `Inbox`, enable **Include files inside subfolders** if needed, preview the batch, then run it. Relay processes the files one at a time, skips the configured archive folder, and records each file as its own run. Pause watching before starting the batch.
+## Pictures, PDFs, and text
 
-For an AI demonstration, configure an installed Ollama model or a cloud API key in **AI connections**, then use **Document digest** with a text-based PDF and a separate output folder. Preview intentionally skips AI. A real run produces a Markdown summary. Cloud runs transmit extracted text to the chosen provider.
+Use **All tools** to resize a real picture, create a PDF from several pictures, merge PDFs, extract pages, or get text. Results are copies in Documents/Relay Results. Use the input/output previews and Open/Folder controls. Text can be edited and copied. English OCR runs locally.
 
-For a failure demonstration, process a file whose target name already exists. Relay stops with a collision error and preserves both files. This illustrates failure handling rather than a simulated success state.
+## Advanced workflows
 
-## Try the specialized templates
+**Advanced tools** opens specialized collection templates for duplicates, backups, renaming, archives, delivery manifests, and AI document outputs. **Workflows** opens the connected-step editor. Choose source and output folders in each step, preview one sample, then run it. Graph watchers start paused after restart. Preview does not call AI or change files.
 
-- **Exact duplicate review:** put two differently named copies of the same file in the source. Choose an archive destination. The review retains one source and identifies the extra by content hash; choose a preferred keep folder to change the retained location.
-- **Verify a backup:** make an output containing one matching file and one different file. Build a review. Matching files are skipped, missing files are proposed for copying, and the different file is flagged without an overwrite.
-- **Prepare a delivery:** build the plan, deselect a file, then Save selection. Expand the manifest's generated-file preview and check that it contains only selected files.
-- **Receipt register:** configure your model, select a folder with a text receipt, and build a review. Confirm the model request, expand the generated JSON, then apply or leave the files untouched. Try a scanned image to exercise bundled English OCR.
-- **Scheduled reviews:** save a no-AI setup, enable its interval, and keep Relay open with watchers paused. It prepares a review when due. Use Prepare review now to test immediately; neither path applies the plan automatically.
+The checked-in screenshots show synthetic folders and files from passing desktop tests. See [organizer collections](organizer-collections.png), [completed review](organizer-complete.png), and [library search](library-overview.png). The compact organizer view is also available at [1120×720](organizer-compact.png).

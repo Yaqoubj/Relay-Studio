@@ -1,0 +1,98 @@
+/* Shared chrome: toolbox and automation keep their layouts in one desktop shell. */
+:root {
+  background: #12191e;
+  color: #e3edef;
+}
+.sidebar {
+  width: 214px;
+  background: #172229;
+  border-color: #34464f;
+  padding: 25px 13px 15px;
+}
+.brand {
+  margin-bottom: 25px;
+}
+.brand > div {
+  font-size: 25px;
+}
+.brand > div > span {
+  color: #92b4b5;
+}
+.brand-mark {
+  border-color: #43685f;
+  background: #203932;
+}
+.workspace-switch {
+  background: #21323b;
+  border-color: #3d525c;
+  padding: 12px 10px;
+  border-radius: 9px;
+}
+.workspace-switch small {
+  color: #8db9ab;
+}
+.workspace-switch .avatar {
+  background: #34574b;
+  color: #c3e7d1;
+}
+.nav-label {
+  color: #8aa7b1;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+.nav-item {
+  padding: 12px;
+  font-size: 12px;
+  color: #acc2cb;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+.nav-item.active {
+  color: #bde7d4;
+  background: #304a43;
+  box-shadow: inset 3px 0 #91ccb4;
+}
+.nav-item:hover {
+  background: #263a43;
+}
+.count {
+  background: #40564e;
+  color: #bddccb;
+}
+.topbar {
+  background: #17232b;
+  border-color: #33464f;
+  font-size: 11px;
+}
+.topbar strong {
+  color: #d5e6e7;
+}
+.topbar span {
+  color: #91acb8;
+}
+.workflow-links {
+  max-height: 210px;
+  flex: 1;
+}
+.workflow-link {
+  color: #95afba;
+}
+.workflow-link.chosen {
+  background: #2b4148;
+  color: #bddbd9;
+}
+.sidebar-bottom .local-card {
+  background: #1e3034;
+  border-color: #3c5656;
+}
+.sidebar-bottom .local-card p {
+  color: #a6c2bd;
+}
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #9addc7;
+  outline-offset: 3px;
+}

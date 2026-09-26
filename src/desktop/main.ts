@@ -1,4 +1,13 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, safeStorage, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Notification,
+  safeStorage,
+  shell,
+} from 'electron';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -12,6 +21,15 @@ import { scanFiles, buildPlan, applyPlan, undoPlan } from './organizer';
 import { updateDeliveryManifest } from './collection-analysis';
 import { needsAI, organizerTemplates, type OrganizerPreset } from '../shared/organizer';
 import { MaintenanceQueue } from './maintenance';
+import { LocationManager } from './location-manager';
+import { assertSafeDirectory } from './file-policy';
+import { checkPath, within } from './organizer';
+import type {
+  PrepareLocation,
+  LocationChoice,
+  FilingRule,
+  TidyLocation,
+} from '../shared/organize-location';
 import { runToolbox, validateToolboxInput } from './toolbox';
 import type { ToolboxInput, ToolboxResult } from '../shared/toolbox';
 import type {
@@ -420,11 +438,161 @@ else {
       return;
     }
     createWindow();
+    const locations = new LocationManager(store, {
+      allowFolder,
+      progress: reportOrganizationProgress,
+      changed: update,
+      services: () => ({
+        progress: reportOrganizationProgress,
+        cached: (key) => store.aiCached(key),
+        cache: (key, text) => store.cacheAI(key, text),
+        ai: (text, config, signal) => transform(settings(), apiKey(), text, config, signal),
+      }),
+    });
+    handle('location-state', async () => {
+      await locations.libraryState();
+      return locations.state();
+    });
+    handle('location-pick', async (known?: 'downloads' | 'desktop' | 'documents') => {
+      if (known !== undefined && !['downloads', 'desktop', 'documents'].includes(known))
+        throw new Error('Unknown location.');
+      const result = await dialog.showOpenDialog(win, {
+        properties: ['openDirectory'],
+        ...(known ? { defaultPath: app.getPath(known) } : {}),
+      });
+      if (result.canceled) return null;
+      await checkPath(result.filePaths[0]);
+      const folder = await fs.realpath(result.filePaths[0]);
+      await assertSafeDirectory(folder);
+      const grants = new Set<string>(JSON.parse(store.get('folders') || '[]'));
+      grants.add(folder);
+      store.set('folders', JSON.stringify([...grants]));
+      return folder;
+    });
+    handle('location-prepare', (input: PrepareLocation) =>
+      organizationTask('Preparing collections', async (signal) => {
+        if (input?.ai) {
+          const config = settings();
+          validateEndpoint(config);
+          if (!config.model || (config.provider === 'cloud' && (!config.allowCloud || !apiKey())))
+            throw new Error('Set up your model in AI connections first.');
+          const answer = await dialog.showMessageBox(win, {
+            message: 'Analyze document text with your model?',
+            detail: `Up to 20 requests to ${config.endpoint}. ${config.provider === 'cloud' ? 'Document text leaves this computer and API charges may apply.' : 'Text is sent to your configured local model.'} Suggestions stay in the review.`,
+            buttons: ['Cancel', 'Analyze'],
+            defaultId: 0,
+            cancelId: 0,
+          });
+          if (answer.response !== 1) return;
+        }
+        await locations.prepare(input, signal);
+      }),
+    );
+    handle('location-choose', (choice: LocationChoice) =>
+      organizationTask('Updating collection', (signal) => locations.choose(choice, signal)),
+    );
+    handle('location-apply', (id: string, revision: number) =>
+      organizationTask('Organizing', (signal) => locations.apply(id, revision, signal)),
+    );
+    handle('location-undo', (id: string) =>
+      organizationTask('Undoing organization', (signal) => locations.undo(id, signal)),
+    );
+    handle('location-load', (id: string) => {
+      idle();
+      locations.load(id);
+    });
+    handle('location-details', (id: string, offset: number) => locations.details(id, offset));
+    handle('location-rule', (rule: FilingRule, remove?: boolean) =>
+      organizationTask('Saving filing choice', async () => {
+        if (remove !== undefined && typeof remove !== 'boolean')
+          throw new Error('Invalid rule operation.');
+        await locations.editRule(rule, remove);
+      }),
+    );
+    handle('location-tidy', (root: string, enabled: boolean) =>
+      organizationTask('Saving tidy location', (signal) => locations.tidy(root, enabled, signal)),
+    );
+    handle('location-folders', async (root: string) => {
+      await allowFolder(root);
+      await checkPath(root);
+      return (await fs.readdir(root, { withFileTypes: true }))
+        .filter(
+          (entry) => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.'),
+        )
+        .slice(0, 500)
+        .map((entry) => ({ name: entry.name, path: path.join(root, entry.name) }));
+    });
+    handle('location-preview', async (id: string, fileId: string) => {
+      const plan = store.organizationPlan(id),
+        item = plan.items.find((item) => item.id === fileId);
+      if (!item || !within(plan.root, item.source) || !/\.(png|jpe?g|webp|bmp)$/i.test(item.source))
+        return '';
+      await allowFolder(plan.root);
+      await checkPath(item.source);
+      const stat = await fs.lstat(item.source);
+      if (!stat.isFile() || stat.size > 15 * 1024 ** 2) return '';
+      const { createCanvas, loadImage } = await import('@napi-rs/canvas');
+      const image = await loadImage(item.source);
+      if (image.width * image.height > 40000000) return '';
+      const scale = Math.min(1, 240 / image.width, 150 / image.height);
+      const canvas = createCanvas(
+        Math.max(1, Math.round(image.width * scale)),
+        Math.max(1, Math.round(image.height * scale)),
+      );
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg');
+    });
+    handle('location-open', async (id: string, groupId: string) => {
+      const plan = store.organizationPlan(id),
+        group = plan.groups?.find((group) => group.id === groupId);
+      const root = group && plan.roots?.[group.rootRef];
+      if (!group || !root || !within(root.path, group.destination))
+        throw new Error('No approved destination.');
+      await allowFolder(root.path);
+      await checkPath(group.destination);
+      await shell.openPath(group.destination);
+    });
+    handle('library-index', (root: string, resumeId?: string) =>
+      organizationTask('Scanning library', (signal) => locations.index(root, signal, resumeId)),
+    );
+    handle('library-search', (query: string, scope: string, offset: number) =>
+      locations.search(query, scope, offset),
+    );
+    handle('library-open', (id: string) =>
+      locations.openIndexed(id, (folder) => shell.openPath(folder)),
+    );
+    handle('library-forget', (id: string) => {
+      idle();
+      locations.forgetScope(id);
+    });
+    handle(
+      'library-collection',
+      (input: import('../shared/organize-location').VirtualCollection, remove?: boolean) => {
+        idle();
+        if (remove !== undefined && typeof remove !== 'boolean')
+          throw new Error('Invalid saved search operation.');
+        locations.saveCollection(input, remove === true);
+      },
+    );
+    const tidyTimer = setInterval(() => {
+      if (
+        active ||
+        watchers.size ||
+        quitting ||
+        !store.records<TidyLocation>('tidy').some((item) => item.enabled)
+      )
+        return;
+      void organizationTask('Checking completed arrivals', (signal) =>
+        locations.pulse(signal),
+      ).catch(() => {});
+    }, 15000);
+    tidyTimer.unref();
+    app.once('before-quit', () => clearInterval(tidyTimer));
     handle('organizer-state', () => ({
       scan: organizationScan,
       plan: organizationPlan,
       progress: organizationProgress,
-      history: store.organizationHistory(),
+      history: store.organizationHistory(1),
       presets: organizationPresets(),
     }));
     handle('organizer-clear-cache', () => {
@@ -579,6 +747,7 @@ else {
       organizationTask('Confirming changes', async (signal) => {
         const plan = organizationPlan;
         if (!plan || plan.status !== 'review') throw new Error('Create and review a plan first.');
+        if (plan.version !== 1) throw new Error('Open this collection in File organizer.');
         await allowFolder(plan.root);
         await allowFolder(plan.options.destination);
         const count = plan.items.filter((i) => i.selected && !i.issue).length;
@@ -640,7 +809,9 @@ else {
       busy: !!active,
     }));
     handle('toolbox-pick', async () => {
-      const picked = await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] });
+      const picked = await dialog.showOpenDialog(win, {
+        properties: ['openFile', 'multiSelections'],
+      });
       if (picked.canceled) return [];
       const result: string[] = [];
       for (const selected of picked.filePaths.slice(0, 50)) {
@@ -652,7 +823,11 @@ else {
       return result;
     });
     handle('toolbox-grant', async (paths: string[]) => {
-      if (!Array.isArray(paths) || paths.length > 50 || paths.some((p) => typeof p !== 'string' || !path.isAbsolute(p)))
+      if (
+        !Array.isArray(paths) ||
+        paths.length > 50 ||
+        paths.some((p) => typeof p !== 'string' || !path.isAbsolute(p))
+      )
         throw new Error('Drop up to 50 regular files.');
       const result: string[] = [];
       for (const candidate of paths) {
@@ -664,7 +839,10 @@ else {
       }
       return result;
     });
-    handle('toolbox-history', () => JSON.parse(store.get('toolbox-history') || '[]') as ToolboxResult[]);
+    handle(
+      'toolbox-history',
+      () => JSON.parse(store.get('toolbox-history') || '[]') as ToolboxResult[],
+    );
     handle('toolbox-run', async (input: ToolboxInput) => {
       idle();
       validateToolboxInput(input);
@@ -673,13 +851,18 @@ else {
       const controller = new AbortController();
       active = controller;
       update();
-      const outputRoot = process.env.RELAY_TOOLBOX_OUTPUT_DIR || path.join(app.getPath('documents'), 'Relay Results');
+      const outputRoot =
+        process.env.RELAY_TOOLBOX_OUTPUT_DIR ||
+        path.join(app.getPath('documents'), 'Relay Results');
       try {
         const result = await runToolbox(input, outputRoot, controller.signal, (progress) => {
           if (win && !win.isDestroyed()) win.webContents.send('studio:toolbox-progress', progress);
         });
         const history = JSON.parse(store.get('toolbox-history') || '[]') as ToolboxResult[];
-        store.set('toolbox-history', JSON.stringify([{ ...result, text: undefined }, ...history].slice(0, 30)));
+        store.set(
+          'toolbox-history',
+          JSON.stringify([{ ...result, text: undefined }, ...history].slice(0, 30)),
+        );
         for (const output of result.outputs) files.add(output.path);
         return result;
       } finally {
@@ -699,14 +882,19 @@ else {
         throw new Error('This picture is too large to preview.');
       const { createCanvas, loadImage } = await import('@napi-rs/canvas');
       const image = await loadImage(file);
-      if (image.width * image.height > 60_000_000) throw new Error('This picture is too large to preview.');
+      if (image.width * image.height > 60_000_000)
+        throw new Error('This picture is too large to preview.');
       const scale = Math.min(1, 420 / Math.max(image.width, image.height));
-      const canvas = createCanvas(Math.max(1, Math.round(image.width * scale)), Math.max(1, Math.round(image.height * scale)));
+      const canvas = createCanvas(
+        Math.max(1, Math.round(image.width * scale)),
+        Math.max(1, Math.round(image.height * scale)),
+      );
       canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
       return canvas.toDataURL('image/png');
     });
     handle('toolbox-open', async (file: string, reveal: boolean) => {
-      if (typeof file !== 'string' || typeof reveal !== 'boolean') throw new Error('Choose a result.');
+      if (typeof file !== 'string' || typeof reveal !== 'boolean')
+        throw new Error('Choose a result.');
       const history = JSON.parse(store.get('toolbox-history') || '[]') as ToolboxResult[];
       if (!history.some((entry) => entry.outputs.some((output) => output.path === file)))
         throw new Error('This is not a recorded result.');
@@ -717,7 +905,8 @@ else {
       }
     });
     handle('toolbox-copy', (value: string) => {
-      if (typeof value !== 'string' || value.length > 500000) throw new Error('Text is too long to copy.');
+      if (typeof value !== 'string' || value.length > 500000)
+        throw new Error('Text is too long to copy.');
       clipboard.writeText(value);
     });
     handle('save', async (w: Workflow) => {

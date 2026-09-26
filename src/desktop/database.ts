@@ -16,6 +16,12 @@ export class Store {
     this.db.exec(
       'CREATE TABLE IF NOT EXISTS organization_plans(id TEXT PRIMARY KEY, created TEXT NOT NULL, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS organization_items(plan_id TEXT NOT NULL, position INTEGER NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(plan_id,id));',
     );
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS location_records(kind TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(kind,id));
+      CREATE TABLE IF NOT EXISTS library_files(id TEXT PRIMARY KEY, scope TEXT NOT NULL, path TEXT NOT NULL, search TEXT NOT NULL, seen TEXT NOT NULL, body TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS library_scope ON library_files(scope);
+      CREATE INDEX IF NOT EXISTS library_path ON library_files(path);
+    `);
     for (const entry of this.organizationHistory()) {
       if (['running', 'undoing'].includes(entry.status)) {
         const plan = this.organizationPlan(entry.id);
@@ -41,6 +47,70 @@ export class Store {
       .prepare('SELECT body FROM workflows ORDER BY rowid')
       .all()
       .map((r) => JSON.parse(String(r.body)));
+  }
+  records<T>(kind: string): T[] {
+    return this.db
+      .prepare('SELECT body FROM location_records WHERE kind=? ORDER BY rowid')
+      .all(kind)
+      .map((row) => JSON.parse(String(row.body)));
+  }
+  record(kind: string, id: string, value: unknown) {
+    this.db
+      .prepare(
+        'INSERT INTO location_records(kind,id,body) VALUES(?,?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body',
+      )
+      .run(kind, id, JSON.stringify(value));
+  }
+  removeRecord(kind: string, id: string) {
+    this.db.prepare('DELETE FROM location_records WHERE kind=? AND id=?').run(kind, id);
+  }
+  getRecord<T>(kind: string, id: string): T | undefined {
+    const row = this.db
+      .prepare('SELECT body FROM location_records WHERE kind=? AND id=?')
+      .get(kind, id);
+    return row ? JSON.parse(String(row.body)) : undefined;
+  }
+  indexFile(file: import('../shared/organize-location').LibraryFile) {
+    this.db
+      .prepare(
+        'INSERT INTO library_files(id,scope,path,search,seen,body) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET search=excluded.search,seen=excluded.seen,body=excluded.body',
+      )
+      .run(
+        file.id,
+        file.scopeId,
+        file.path,
+        `${file.relative}\n${file.category}\n${file.snippet}`.toLowerCase(),
+        file.seen,
+        JSON.stringify(file),
+      );
+  }
+  indexedFile(id: string): import('../shared/organize-location').LibraryFile | undefined {
+    const row = this.db.prepare('SELECT body FROM library_files WHERE id=?').get(id);
+    return row ? JSON.parse(String(row.body)) : undefined;
+  }
+  searchLibrary(
+    query: string,
+    scope = '',
+    offset = 0,
+  ): import('../shared/organize-location').LibraryFile[] {
+    const escaped = query.toLowerCase().replace(/[\\%_]/g, '\\$&');
+    return this.db
+      .prepare(
+        "SELECT body FROM library_files WHERE (?='' OR scope=?) AND search LIKE ? ESCAPE '\\' ORDER BY path LIMIT 100 OFFSET ?",
+      )
+      .all(scope, scope, `%${escaped}%`, offset)
+      .map((row) => JSON.parse(String(row.body)));
+  }
+  finishIndex(scope: string, seen: string) {
+    this.db.prepare('DELETE FROM library_files WHERE scope=? AND seen<>?').run(scope, seen);
+  }
+  indexTotals(scope: string) {
+    const row = this.db
+      .prepare(
+        "SELECT count(*) AS count, COALESCE(sum(json_extract(body,'$.size')),0) AS bytes FROM library_files WHERE scope=?",
+      )
+      .get(scope)!;
+    return { count: Number(row.count), bytes: Number(row.bytes) };
   }
   workflow(id: string): Workflow {
     const row = this.db.prepare('SELECT body FROM workflows WHERE id=?').get(id);
@@ -117,6 +187,9 @@ export class Store {
     if (!row) throw new Error('Organization plan not found.');
     return {
       ...JSON.parse(String(row.body)),
+      bundles:
+        this.getRecord<OrganizationPlan['bundles']>('manifest', id) ||
+        JSON.parse(String(row.body)).bundles,
       items: this.db
         .prepare('SELECT body FROM organization_items WHERE plan_id=? ORDER BY position')
         .all(id)
@@ -124,9 +197,10 @@ export class Store {
     };
   }
   putOrganizationPlan(plan: OrganizationPlan, item?: PlanItem, replaceItems = false) {
-    const { items, ...metadata } = plan;
+    const { items, bundles, ...metadata } = plan;
     this.db.exec('BEGIN');
     try {
+      if (replaceItems && bundles) this.record('manifest', plan.id, bundles);
       this.db
         .prepare(
           'INSERT INTO organization_plans(id,created,body) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body',
@@ -150,12 +224,12 @@ export class Store {
       throw error;
     }
   }
-  organizationHistory(): OrganizerState['history'] {
+  organizationHistory(version?: 1 | 2): OrganizerState['history'] {
     return this.db
       .prepare(
-        'SELECT id,body,(SELECT COUNT(*) FROM organization_items WHERE plan_id=organization_plans.id) AS count FROM organization_plans ORDER BY created DESC',
+        "SELECT id,body,(SELECT COUNT(*) FROM organization_items WHERE plan_id=organization_plans.id) AS count FROM organization_plans WHERE (? IS NULL OR json_extract(body,'$.version')=?) ORDER BY created DESC LIMIT 200",
       )
-      .all()
+      .all(version ?? null, version ?? null)
       .map((row) => {
         const plan = JSON.parse(String(row.body)) as OrganizationPlan;
         return {

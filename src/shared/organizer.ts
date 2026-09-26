@@ -88,9 +88,19 @@ export type PlanItem = {
   sourceHash?: string;
   keeper?: { path: string; stamp: FileStamp; hash: string };
   group?: string;
+  setId?: string;
+  rootRef?: string;
+  bundleId?: string;
 };
 export type OrganizationPlan = {
-  version: 1;
+  version: 1 | 2;
+  revision?: number;
+  roots?: Record<string, { path: string; dev: number; ino: number }>;
+  groups?: import('./organize-location').CollectionGroup[];
+  bundles?: import('./organize-location').FolderBundle[];
+  removedFolders?: string[];
+  folderJournal?: { path: string; state: 'removing' | 'removed' | 'restoring' | 'restored' }[];
+  preserved?: { outsidePlan: number; reasons: string[] };
   id: string;
   scanId: string;
   root: string;

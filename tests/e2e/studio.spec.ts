@@ -2,8 +2,9 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { createPersonalTemp } from '../support/personal-temp';
 test('organize existing folder previews and processes nested files', async () => {
-  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'relay-batch-ui-'));
+  const temp = await createPersonalTemp('batch-ui-');
   const input = path.join(temp, 'inbox');
   const output = path.join(temp, 'archive');
   await fs.mkdir(path.join(input, 'nested'), { recursive: true });
@@ -55,7 +56,7 @@ test('organize existing folder previews and processes nested files', async () =>
   }
 });
 test('create and connect steps, export a portable recipe, and import it', async () => {
-  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'relay-editor-'));
+  const temp = await createPersonalTemp('editor-');
   const exported = path.join(temp, 'recipe.json');
   const app = await electron.launch({
     args: ['.'],
@@ -132,7 +133,7 @@ test('create and connect steps, export a portable recipe, and import it', async 
   }
 });
 test('desktop workflow: configure, preview, run, undo, watch, and persist', async () => {
-  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'relay-e2e-'));
+  const temp = await createPersonalTemp('e2e-');
   const input = path.join(temp, 'inbox'),
     output = path.join(temp, 'archive');
   await fs.mkdir(input);
@@ -233,7 +234,7 @@ test('desktop workflow: configure, preview, run, undo, watch, and persist', asyn
     const page = await reopened.firstWindow();
     await page.getByRole('button', { name: 'Run history', exact: true }).click();
     await expect(page.locator('.history-row:not(.heading)')).toHaveCount(3);
-    await expect(page.getByText('All folder watchers paused')).toBeVisible();
+    await expect(page.getByText('Workflow watchers paused')).toBeVisible();
   } finally {
     await reopened.close();
     await fs.rm(temp, { recursive: true, force: true });

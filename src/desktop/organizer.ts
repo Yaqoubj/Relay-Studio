@@ -3,7 +3,14 @@ import { createReadStream, constants } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { safeName } from './validation';
-import { assertSafeToReorganize, hasManagedExtension, hasManagedName, isManagedDirectory } from './file-policy';
+import {
+  assertSafeDirectory,
+  assertSafeToReorganize,
+  createPolicyContext,
+  hasManagedExtension,
+  hasManagedName,
+  isManagedDirectory,
+} from './file-policy';
 import { planSmart } from './smart-organizer';
 import { fileCategories, organizerTemplates } from '../shared/organizer';
 import {
@@ -144,7 +151,8 @@ export async function scanFiles(
     throw new Error('Choose a folder and valid exclusions.');
   await checkPath(options.root);
   const root = await fs.realpath(options.root);
-  if (protectedPath(root) || hasManagedName(root) || await isManagedDirectory(root))
+  await assertSafeDirectory(root);
+  if (protectedPath(root) || hasManagedName(root) || (await isManagedDirectory(root)))
     throw new Error(
       'System and application folders cannot be scanned for organization. Choose a personal folder or data drive.',
     );
@@ -188,7 +196,7 @@ export async function scanFiles(
     }
     try {
       await checkPath(folder);
-      if (await isProject(folder) || await isManagedDirectory(folder)) {
+      if ((await isProject(folder)) || (await isManagedDirectory(folder))) {
         warn(`Application, game, or project folder preserved: ${folder}`);
         continue;
       }
@@ -307,6 +315,7 @@ export async function buildPlan(
       ? scan.root
       : await fs.realpath(options.destination);
   await checkPath(destination, smart && options.placement === 'subfolder');
+  await assertSafeDirectory(destination);
   if (protectedPath(destination)) throw new Error('Choose a personal output folder.');
   if (smart && options.placement === 'elsewhere' && within(destination, scan.root))
     throw new Error('Choose an output folder outside the source and its parents.');
@@ -510,9 +519,19 @@ export async function applyPlan(
   save: Save,
   progress: (p: OrganizerProgress) => void,
 ) {
-  if (plan.version !== 1 || plan.status !== 'review')
+  if (![1, 2].includes(plan.version) || plan.status !== 'review')
     throw new Error('Only a reviewed, unexecuted plan can be applied.');
   const items = plan.items.filter((i) => i.selected && !i.issue);
+  const policy = createPolicyContext();
+  if (plan.version === 2) {
+    for (const item of items)
+      if (
+        plan.items.some((other) => other.setId === item.setId && (!other.selected || other.issue))
+      )
+        throw new Error('Related files must be selected together.');
+    await validatePlanRoots(plan, policy);
+    await verifyBundles(plan, items, signal);
+  }
   if (!items.length) throw new Error('Select at least one conflict-free change.');
   plan.status = 'running';
   save(plan);
@@ -522,13 +541,14 @@ export async function applyPlan(
     for (const item of items) {
       signal.throwIfAborted();
       if ((item.action || plan.options.operation) === 'move')
-        await assertSafeToReorganize(item.source);
+        await assertSafeToReorganize(item.source, policy);
       await verifySource(item);
       if (item.sourceHash && (await hashFile(item.source, signal)) !== item.sourceHash)
         throw new Error('Source contents changed since analysis. Build a fresh review.');
       await verifyKeeper(item, signal);
-      if (!within(plan.root, item.source) || !within(plan.options.destination, item.destination))
+      if (!within(plan.root, item.source) || !within(destinationRoot(plan, item), item.destination))
         throw new Error('File is outside the approved folders.');
+      await assertSafeDirectory(path.dirname(item.destination), policy);
       await checkPath(item.destination, true);
       if (await exists(item.destination))
         throw new Error(`Destination exists: ${item.destination}`);
@@ -542,7 +562,7 @@ export async function applyPlan(
       try {
         await verifySource(item);
         if ((item.action || plan.options.operation) === 'move')
-          await assertSafeToReorganize(item.source);
+          await assertSafeToReorganize(item.source, policy);
         const sourceHash = await hashFile(item.source, signal);
         if (item.sourceHash && sourceHash !== item.sourceHash)
           throw new Error('Source contents changed since analysis. Build a fresh review.');
@@ -556,6 +576,8 @@ export async function applyPlan(
         await verifySource(item);
         signal.throwIfAborted();
         await checkPath(item.destination, true);
+        if (plan.version === 2) await validatePlanRoots(plan, policy);
+        await assertSafeDirectory(path.dirname(item.destination), policy);
         await makeTrackedFolders(path.dirname(item.destination), plan, save);
         await checkPath(item.destination, true);
         if (await exists(item.destination))
@@ -590,6 +612,28 @@ export async function applyPlan(
         throw e;
       }
     }
+    for (const bundle of plan.bundles || []) {
+      if (!items.some((item) => item.bundleId === bundle.id)) continue;
+      for (const directory of bundle.directories) {
+        const relative = path.relative(bundle.source, directory.path);
+        await makeTrackedFolders(path.join(bundle.destination, relative), plan, save);
+      }
+      for (const directory of [...bundle.directories].reverse()) {
+        await checkPath(directory.path);
+        const stat = await fs.lstat(directory.path);
+        if (stat.dev !== directory.dev || stat.ino !== directory.ino)
+          throw new Error(
+            'A collection folder changed during the move. Remaining folders retained.',
+          );
+        const folderEntry = { path: directory.path, state: 'removing' as const };
+        (plan.folderJournal ||= []).push(folderEntry);
+        save(plan);
+        await fs.rmdir(directory.path); // Never recursively delete: new arrivals keep the folder.
+        plan.folderJournal![plan.folderJournal!.length - 1].state = 'removed';
+        (plan.removedFolders ||= []).push(directory.path);
+        save(plan);
+      }
+    }
     plan.status = 'complete';
   } catch (e) {
     plan.status = signal.aborted ? 'cancelled' : 'failed';
@@ -603,11 +647,16 @@ export async function undoPlan(
   save: Save,
   progress: (p: OrganizerProgress) => void,
 ) {
+  if (![1, 2].includes(plan.version)) throw new Error('Unsupported plan version.');
+  if (plan.version === 2) await validatePlanRoots(plan);
   if (['review', 'running', 'undoing', 'undone'].includes(plan.status))
     throw new Error('This plan cannot be undone now.');
   // Uncertain crash windows require inspection; never guess ownership of a file.
   if (
-    plan.items.some((i) => ['copying', 'removing', 'restoring', 'undo-removing'].includes(i.state))
+    plan.items.some((i) =>
+      ['copying', 'removing', 'restoring', 'undo-removing'].includes(i.state),
+    ) ||
+    plan.folderJournal?.some((entry) => ['removing', 'restoring'].includes(entry.state))
   )
     throw new Error(
       'An interrupted operation needs manual inspection. Check the journal paths before changing either copy.',
@@ -622,6 +671,10 @@ export async function undoPlan(
     let count = 0;
     for (const item of items) {
       signal.throwIfAborted();
+      if (!within(plan.root, item.source) || !within(destinationRoot(plan, item), item.destination))
+        throw new Error('Undo path is outside the recorded roots.');
+      await assertSafeDirectory(path.dirname(item.source));
+      await assertSafeDirectory(path.dirname(item.destination));
       progress({ stage: 'Undoing changes', count, total: items.length, path: item.destination });
       await checkPath(item.destination);
       if (!item.hash || (await hashFile(item.destination, signal)) !== item.hash)
@@ -655,7 +708,28 @@ export async function undoPlan(
       save(plan, item);
       count++;
     }
+    for (const folder of [...(plan.removedFolders || [])].reverse()) {
+      if (!within(plan.root, folder))
+        throw new Error('Recorded source folder is outside the root.');
+      await checkPath(folder, true);
+      const entry = plan.folderJournal?.find((entry) => entry.path === folder);
+      if (entry) {
+        entry.state = 'restoring';
+        save(plan);
+      }
+      await fs.mkdir(folder, { recursive: true });
+      if (entry) {
+        entry.state = 'restored';
+        save(plan);
+      }
+    }
     for (const folder of [...new Set(plan.createdFolders || [])].reverse()) {
+      if (
+        !Object.values(plan.roots || { legacy: { path: plan.options.destination } }).some((root) =>
+          within(root.path, folder),
+        )
+      )
+        throw new Error('Recorded folder is outside the destination roots.');
       try {
         await checkPath(folder);
         await fs.rmdir(folder);
@@ -672,4 +746,65 @@ export async function undoPlan(
     plan.error = (e as Error).message;
   }
   save(plan);
+}
+
+export function destinationRoot(plan: OrganizationPlan, item: OrganizationPlan['items'][number]) {
+  if (plan.version === 1) return plan.options.destination;
+  const root = item.rootRef && plan.roots?.[item.rootRef];
+  if (!root) throw new Error('Unknown destination root reference.');
+  return root.path;
+}
+
+export async function validatePlanRoots(plan: OrganizationPlan, policy = createPolicyContext()) {
+  if (!plan.roots || !Object.keys(plan.roots).length) throw new Error('Missing approved roots.');
+  for (const root of Object.values(plan.roots)) {
+    await checkPath(root.path);
+    const stat = await fs.lstat(root.path);
+    if (!stat.isDirectory() || stat.dev !== root.dev || stat.ino !== root.ino)
+      throw new Error('A library was disconnected or replaced. Prepare a new review.');
+    await assertSafeDirectory(root.path, policy);
+  }
+}
+
+async function verifyBundles(
+  plan: OrganizationPlan,
+  items: OrganizationPlan['items'],
+  signal: AbortSignal,
+) {
+  for (const bundle of plan.bundles || []) {
+    if (!items.some((item) => item.bundleId === bundle.id)) continue;
+    const approved = plan.roots?.[bundle.rootRef];
+    if (
+      !approved ||
+      !within(plan.root, bundle.source) ||
+      !within(approved.path, bundle.destination) ||
+      within(bundle.source, bundle.destination) ||
+      within(bundle.destination, bundle.source)
+    )
+      throw new Error('Collection is outside approved roots.');
+    await checkPath(bundle.destination, true);
+    if (await exists(bundle.destination))
+      throw new Error('Collection destination appeared after review. Nothing was merged.');
+    const expected = new Set([
+      ...bundle.files.map((file) => file.path),
+      ...bundle.directories.slice(1).map((dir) => dir.path),
+    ]);
+    for (const dir of bundle.directories) {
+      if (!within(bundle.source, dir.path)) throw new Error('Invalid collection directory.');
+      signal.throwIfAborted();
+      await checkPath(dir.path);
+      const stat = await fs.lstat(dir.path);
+      if (stat.dev !== dir.dev || stat.ino !== dir.ino)
+        throw new Error('Collection folder changed since review.');
+      for (const name of await fs.readdir(dir.path))
+        if (!expected.has(path.join(dir.path, name)))
+          throw new Error('Collection contents changed since review.');
+    }
+    for (const file of bundle.files) {
+      if (!within(bundle.source, file.path)) throw new Error('Invalid collection member.');
+      await verifySource({ source: file.path, stamp: file.stamp });
+      if ((await hashFile(file.path, signal)) !== file.hash)
+        throw new Error('Collection contents changed since review.');
+    }
+  }
 }

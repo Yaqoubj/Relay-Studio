@@ -19,6 +19,7 @@ test('organizer reviews selected changes, restores saved plans, applies and undo
   try {
     let page = await app.firstWindow();
     await page.getByRole('button', { name: 'File organizer', exact: true }).click();
+    await page.getByRole('button', { name: 'Advanced tools' }).click();
     await page.getByLabel('Organizer template').selectOption('drive');
     await app.evaluate(({ dialog }, folder) => {
       dialog.showOpenDialog = (async () => ({
@@ -49,6 +50,7 @@ test('organizer reviews selected changes, restores saved plans, applies and undo
     });
     page = await app.firstWindow();
     await page.getByRole('button', { name: 'File organizer', exact: true }).click();
+    await page.getByRole('button', { name: 'Advanced tools' }).click();
     await expect(page.locator('.organization-review tbody tr')).toHaveCount(3);
     await page
       .getByLabel(`Include ${path.join(source, 'Meeting notes.txt')}`, { exact: true })

@@ -69,6 +69,7 @@ import type {
 } from '../shared/types';
 import { blankWorkflow, catalog, templates } from '../shared/catalog';
 import { Organizer, OrganizerCards } from './Organizer';
+import { OrganizeLocation } from './OrganizeLocation';
 import { Toolbox } from './Toolbox';
 import type { OrganizerTemplate } from '../shared/organizer';
 const icons = {
@@ -209,7 +210,16 @@ export function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [page, setPage] = useState<
-    'home' | 'tools' | 'activity' | 'editor' | 'templates' | 'history' | 'connections' | 'cloud' | 'organizer'
+    | 'home'
+    | 'tools'
+    | 'activity'
+    | 'editor'
+    | 'templates'
+    | 'history'
+    | 'connections'
+    | 'cloud'
+    | 'organizer'
+    | 'organizer-advanced'
   >('home');
   const [organizerTemplate, setOrganizerTemplate] = useState<OrganizerTemplate>();
   const [selected, setSelected] = useState<string | null>(null);
@@ -442,10 +452,27 @@ export function App() {
           <ChevronDown size={13} />
         </div>
         <div className="nav-label">EVERYDAY TOOLS</div>
-        <button className={`nav-item ${page === 'home' ? 'active' : ''}`} onClick={() => setPage('home')}><LayoutGrid size={17} />Home</button>
-        <button className={`nav-item ${page === 'tools' ? 'active' : ''}`} onClick={() => setPage('tools')}><Search size={17} />All tools</button>
-        <button className={`nav-item ${page === 'activity' ? 'active' : ''}`} onClick={() => setPage('activity')}><Activity size={17} />Activity</button>
-        <div className="nav-label" style={{ marginTop: 20 }}>ADVANCED</div>
+        <button
+          className={`nav-item ${page === 'home' ? 'active' : ''}`}
+          onClick={() => setPage('home')}
+        >
+          <LayoutGrid size={17} />
+          Home
+        </button>
+        <button
+          className={`nav-item ${page === 'tools' ? 'active' : ''}`}
+          onClick={() => setPage('tools')}
+        >
+          <Search size={17} />
+          All tools
+        </button>
+        <button
+          className={`nav-item ${page === 'activity' ? 'active' : ''}`}
+          onClick={() => setPage('activity')}
+        >
+          <Activity size={17} />
+          Activity
+        </button>
         <button
           className={`nav-item ${page === 'organizer' ? 'active' : ''}`}
           onClick={() => {
@@ -456,6 +483,9 @@ export function App() {
           <Folder size={17} />
           File organizer
         </button>
+        <div className="nav-label" style={{ marginTop: 20 }}>
+          AUTOMATION
+        </div>
         <button
           className={`nav-item ${page === 'editor' ? 'active' : ''}`}
           onClick={() => setPage('editor')}
@@ -536,16 +566,16 @@ export function App() {
             <span>
               {snapshot.watching.length
                 ? `${snapshot.watching.length} folder watcher active`
-                : 'All folder watchers paused'}
+                : 'Workflow watchers paused'}
             </span>
           </div>
           <button className="nav-item" onClick={() => setGuide(true)}>
             <BookOpen size={16} />
-            Quick start guide
+            Workflow guide
             <ArrowRight size={14} />
           </button>
           <div className="version">
-            RELAY STUDIO <span>v1.4.0</span>
+            RELAY STUDIO <span>v{__APP_VERSION__}</span>
           </div>
         </div>
       </aside>
@@ -562,21 +592,23 @@ export function App() {
                   : page === 'activity'
                     ? 'Activity'
                     : page === 'organizer'
-                ? 'File organizer'
-                : page === 'editor'
-                  ? 'Workflows'
-                  : page === 'connections'
-                    ? 'AI connections'
-                    : page === 'cloud'
-                      ? 'Cloud workspace'
-                      : page === 'history'
-                        ? 'Run history'
-                        : 'Templates'}
+                      ? 'File organizer'
+                      : page === 'organizer-advanced'
+                        ? 'Advanced file tools'
+                        : page === 'editor'
+                          ? 'Workflows'
+                          : page === 'connections'
+                            ? 'AI connections'
+                            : page === 'cloud'
+                              ? 'Cloud workspace'
+                              : page === 'history'
+                                ? 'Run history'
+                                : 'Templates'}
             </strong>
           </div>
           <div className="top-status">
             <span className="status-dot online" />
-            Local engine <span className="top-divider" /> <span className="avatar small">Y</span>
+            Local workspace <span className="top-divider" /> <ShieldCheck size={15} />
           </div>
         </div>
         {page === 'editor' && workflow ? (
@@ -1102,8 +1134,29 @@ export function App() {
             </Button>
           </div>
         ) : null}
-        {page === 'organizer' && <Organizer initialTemplate={organizerTemplate} busy={busy} />}
-        {(['home', 'tools', 'activity'] as const).includes(page as 'home' | 'tools' | 'activity') && <Toolbox view={page as 'home' | 'tools' | 'activity'} openOrganizer={(template) => { setOrganizerTemplate(template); setPage('organizer'); }} />}
+        {page === 'organizer' && (
+          <OrganizeLocation
+            busy={busy}
+            advanced={() => {
+              setOrganizerTemplate(undefined);
+              setPage('organizer-advanced');
+            }}
+          />
+        )}
+        {page === 'organizer-advanced' && (
+          <Organizer initialTemplate={organizerTemplate} busy={busy} />
+        )}
+        {(['home', 'tools', 'activity'] as const).includes(
+          page as 'home' | 'tools' | 'activity',
+        ) && (
+          <Toolbox
+            view={page as 'home' | 'tools' | 'activity'}
+            openOrganizer={(template) => {
+              setOrganizerTemplate(template);
+              setPage(template === 'smart' ? 'organizer' : 'organizer-advanced');
+            }}
+          />
+        )}
         {page === 'templates' && (
           <div className="page-content">
             <div className="page-eyebrow">READY TO USE</div>
@@ -1124,7 +1177,7 @@ export function App() {
                     ai={ai}
                     choose={(id) => {
                       setOrganizerTemplate(id);
-                      setPage('organizer');
+                      setPage(id === 'smart' ? 'organizer' : 'organizer-advanced');
                     }}
                   />
                 }

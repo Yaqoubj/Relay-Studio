@@ -1,15 +1,40 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { StudioAPI } from '../shared/types';
 const api: StudioAPI = {
+  locationState: () => ipcRenderer.invoke('studio:location-state'),
+  locationPick: (known) => ipcRenderer.invoke('studio:location-pick', known),
+  locationPrepare: (input) => ipcRenderer.invoke('studio:location-prepare', input),
+  locationChoose: (input) => ipcRenderer.invoke('studio:location-choose', input),
+  locationApply: (id, revision) => ipcRenderer.invoke('studio:location-apply', id, revision),
+  locationUndo: (id) => ipcRenderer.invoke('studio:location-undo', id),
+  locationLoad: (id) => ipcRenderer.invoke('studio:location-load', id),
+  locationDetails: (id, offset) => ipcRenderer.invoke('studio:location-details', id, offset),
+  locationFolders: (root) => ipcRenderer.invoke('studio:location-folders', root),
+  locationPreview: (id, fileId) => ipcRenderer.invoke('studio:location-preview', id, fileId),
+  locationOpen: (id, groupId) => ipcRenderer.invoke('studio:location-open', id, groupId),
+  locationRule: (rule, remove) => ipcRenderer.invoke('studio:location-rule', rule, remove),
+  locationTidy: (root, enabled) => ipcRenderer.invoke('studio:location-tidy', root, enabled),
+  libraryIndex: (root, resumeId) => ipcRenderer.invoke('studio:library-index', root, resumeId),
+  librarySearch: (query, scope, offset) =>
+    ipcRenderer.invoke('studio:library-search', query, scope, offset),
+  libraryOpen: (id) => ipcRenderer.invoke('studio:library-open', id),
+  libraryForget: (id) => ipcRenderer.invoke('studio:library-forget', id),
+  libraryCollection: (input, remove) =>
+    ipcRenderer.invoke('studio:library-collection', input, remove),
   toolboxPick: () => ipcRenderer.invoke('studio:toolbox-pick'),
-  toolboxDropped: (files) => ipcRenderer.invoke('studio:toolbox-grant', files.map((file) => webUtils.getPathForFile(file)).filter(Boolean)),
+  toolboxDropped: (files) =>
+    ipcRenderer.invoke(
+      'studio:toolbox-grant',
+      files.map((file) => webUtils.getPathForFile(file)).filter(Boolean),
+    ),
   toolboxRun: (input) => ipcRenderer.invoke('studio:toolbox-run', input),
   toolboxHistory: () => ipcRenderer.invoke('studio:toolbox-history'),
   toolboxPreview: (file) => ipcRenderer.invoke('studio:toolbox-preview', file),
   toolboxOpen: (file, reveal) => ipcRenderer.invoke('studio:toolbox-open', file, reveal),
   toolboxCopy: (value) => ipcRenderer.invoke('studio:toolbox-copy', value),
   onToolboxProgress: (callback) => {
-    const listener = (_event: unknown, progress: Parameters<typeof callback>[0]) => callback(progress);
+    const listener = (_event: unknown, progress: Parameters<typeof callback>[0]) =>
+      callback(progress);
     ipcRenderer.on('studio:toolbox-progress', listener);
     return () => ipcRenderer.removeListener('studio:toolbox-progress', listener);
   },

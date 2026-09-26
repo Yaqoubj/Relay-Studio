@@ -5,11 +5,12 @@ import path from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
 import { scanFiles, buildPlan, applyPlan, undoPlan } from '../src/desktop/organizer';
 import { organizerDefaults } from '../src/shared/organizer';
+import { createPersonalTemp } from './support/personal-temp';
 
 const signal = () => new AbortController().signal;
 const noop = () => {};
 async function setup(t: { after(fn: () => Promise<void>): void }) {
-  const base = await fs.mkdtemp(path.join(process.cwd(), 'relay-smart-test-'));
+  const base = await createPersonalTemp('smart-');
   t.after(() => fs.rm(base, { recursive: true, force: true }));
   const source = path.join(base, 'Downloads');
   await fs.mkdir(source);

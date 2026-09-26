@@ -78,6 +78,31 @@ export type CloudSettings = {
   workspaceId?: string;
 };
 export interface StudioAPI {
+  locationState(): Promise<import('./organize-location').LocationState>;
+  locationPick(known?: 'downloads' | 'desktop' | 'documents'): Promise<string | null>;
+  locationPrepare(input: import('./organize-location').PrepareLocation): Promise<void>;
+  locationChoose(input: import('./organize-location').LocationChoice): Promise<void>;
+  locationApply(id: string, revision: number): Promise<void>;
+  locationUndo(id: string): Promise<void>;
+  locationLoad(id: string): Promise<void>;
+  locationDetails(id: string, offset: number): Promise<import('./organizer').PlanItem[]>;
+  locationFolders(root: string): Promise<{ name: string; path: string }[]>;
+  locationPreview(id: string, fileId: string): Promise<string>;
+  locationOpen(id: string, groupId: string): Promise<void>;
+  locationRule(rule: import('./organize-location').FilingRule, remove?: boolean): Promise<void>;
+  locationTidy(root: string, enabled: boolean): Promise<void>;
+  libraryIndex(root: string, resumeId?: string): Promise<void>;
+  librarySearch(
+    query: string,
+    scope: string,
+    offset: number,
+  ): Promise<import('./organize-location').LibraryFile[]>;
+  libraryOpen(id: string): Promise<void>;
+  libraryForget(id: string): Promise<void>;
+  libraryCollection(
+    input: import('./organize-location').VirtualCollection,
+    remove?: boolean,
+  ): Promise<void>;
   toolboxPick(): Promise<string[]>;
   toolboxDropped(files: File[]): Promise<string[]>;
   toolboxRun(input: import('./toolbox').ToolboxInput): Promise<import('./toolbox').ToolboxResult>;
@@ -85,7 +110,9 @@ export interface StudioAPI {
   toolboxPreview(file: string): Promise<string>;
   toolboxOpen(file: string, reveal: boolean): Promise<void>;
   toolboxCopy(text: string): Promise<void>;
-  onToolboxProgress(callback: (progress: import('./toolbox').ToolboxProgress | null) => void): () => void;
+  onToolboxProgress(
+    callback: (progress: import('./toolbox').ToolboxProgress | null) => void,
+  ): () => void;
   organizerState(): Promise<import('./organizer').OrganizerState>;
   onOrganizerProgress(
     callback: (progress: import('./organizer').OrganizerProgress | null) => void,

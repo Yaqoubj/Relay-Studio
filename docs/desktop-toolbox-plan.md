@@ -2,6 +2,8 @@
 
 Status: implementation started, September 24, 2026. The first desktop toolbox slice is in the app; the complete inventory and later waves below remain a plan. This document does not authorize a release.
 
+Current priority (September 26): O1–O6 organizer work has been implemented in source. The owner requested stopping before tests. Follow [validation and screenshot handoff](organizer-test-handoff.md) before expanding the toolbox. [Organizer design](organizer-next-task.md) records the underlying decisions.
+
 Implemented so far: Home, All tools, Activity for finished results, eight image/PDF/text actions, picker/drop input, and an additional protection check for recognized game/application/project data. Smart organization keeps names by default. The older file organizer and workflow editor remain available. Durable toolbox jobs, background workers, desktop capture/clipboard tools, media tools, and remote workers are not implemented yet.
 
 ## 1. The product

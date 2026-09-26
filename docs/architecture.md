@@ -1,130 +1,133 @@
-# Architecture and tradeoffs
+# Architecture
 
-Relay Studio is a local desktop toolbox with a retained visual workflow editor. React Flow supplies the advanced canvas; it does not execute workflows. The application owns the graph format, runtime, permissions, persistence, and recovery behavior.
+Relay Studio uses Electron, React, TypeScript, and local SQLite. React Flow supplies the optional workflow canvas. The application owns execution, permissions, persistence, and recovery. No competitor runtime, server, or model is bundled into the organizer.
 
-## Everyday toolbox
-
-`src/studio/Toolbox.tsx` shows Home, the tool catalog, tool-specific inputs/results, and recent finished results. Tool IDs and accepted input kinds live in `src/shared/toolbox.ts`. The sandboxed preload bridge converts file-picker and drop inputs to local paths; `src/desktop/main.ts` grants those paths for the session and dispatches validated actions to `src/desktop/toolbox.ts`. The renderer does not receive arbitrary filesystem APIs.
-
-The first eight actions use `@napi-rs/canvas` for picture outputs, `pdf-lib` for PDF creation/merge/page extraction, and the existing document extractor for text and English OCR. Outputs use exclusive file creation in `Documents/Relay Results/<tool>` with numbered collision names; input files are not modified. Per-file errors appear beside successful results. Recent result metadata is kept locally (up to 30 entries), but current toolbox runs are not durable queued jobs and are not automatically resumed after a crash. Picture metadata may be lost during re-encoding; transparent inputs are flattened onto white only for JPG output.
-
-`src/desktop/file-policy.ts` centralizes the new conservative check for known game/application names, save extensions, and directory markers. The organizer scan skips recognized trees; organizer apply and graph file mutations check sources again before changing them. This is a guardrail, not a universal detector of every application-managed folder. Smart organization keeps original filenames unless renaming is chosen, and episode detection requires a media file or sidecar rather than a matching filename alone.
-
-## Boundaries
+## Process boundaries
 
 ```mermaid
 flowchart LR
-  UI[React + React Flow] --> Bridge[Sandboxed preload bridge]
+  UI[React desktop UI] --> Bridge[Sandboxed preload]
   Bridge --> Main[Electron main process]
-  Main --> Validate[Graph and configuration validation]
-  Validate --> Engine[Sequential execution engine]
-  Engine --> Files[Local filesystem]
-  Engine --> AI[Ollama or HTTPS cloud adapter]
-  Engine --> DB[(Local SQLite journal)]
-  Watch[Folder watcher + bounded queue] --> Engine
-  Batch[Existing-folder collector + bounded batch] --> Engine
-  Main --> Organizer[Collection scanner and plan builder]
-  Organizer --> Review[Persisted plan and selected items]
-  Review --> Apply[Sequential batch apply and undo]
-  Apply --> Files
-  Apply --> DB
-  Engine -. optional sync .-> API[Relay Cloud API]
-  API --> CloudDB[(Cloud SQLite in dev)]
+  Main --> Location[Location manager]
+  Location --> Prepare[Read-only grouping and resolution]
+  Prepare --> Review[Versioned collection review]
+  Review --> Executor[Verified file executor]
+  Location --> Monitor[Durable arrival records]
+  Monitor --> Executor
+  Location --> Index[Scoped library index]
+  Main --> Graph[Validated workflow engine]
+  Main --> Tools[Picture, PDF and text tools]
+  Executor --> Files[Local files]
+  Graph --> Files
+  Tools --> Files
+  Executor --> DB[(SQLite)]
+  Index --> DB
+  Monitor --> DB
+  Prepare -. explicit opt-in .-> AI[Configured model]
+  Graph -. optional sync .-> API[Self-hosted workspace API]
 ```
 
-The renderer has no Node.js or filesystem access. IPC verifies the sending frame and its local page URL. Native folder pickers create persistent canonical-folder grants. Manual input files require a file-picker grant for the current session. Imported recipes have all folder fields reset. Exported recipes omit folder paths and never contain connection credentials. The optional API owns accounts, workspaces, synced workflows, share links, and compact run summaries. The desktop client sends workflow definitions to the API; those definitions can include configured folder path strings. It sends run source names rather than full source paths, and it does not upload file contents or AI keys.
+The renderer has no Node or filesystem access. IPC accepts requests only from the main window's local page. Navigation, extra windows, renderer network requests, and permission requests are blocked. Native folder selection creates a canonical persistent grant. Downloads, Desktop, and Documents shortcuts open the native picker at Electron's actual OS location; showing a shortcut does not grant access. Imported graph recipes have folder paths cleared. Exported recipes omit paths and credentials.
 
-The Content Security Policy blocks renderer network access, remote scripts, frames, and embedded objects. All AI networking happens in the main process. Navigation and new windows are blocked.
+One active-operation lock covers preparation, choice changes, execution, undo, indexing, graph runs, and automatic filing. Graph watchers must be paused before collection work. Progress events are throttled separately from state snapshots. Quit cancels an active operation at its supported cancellation boundary.
 
-## Graph semantics
+## Primary organizer
 
-Each workflow has one trigger and at most 40 steps. A normal output has one successor; conditions have separate Yes and No outputs. An unconnected condition output ends that path successfully. Cycles, joins, duplicate IDs, and multiple successors on the same output are rejected. Drafts may contain disconnected steps, but execution requires every step to be reachable from the trigger.
+`src/shared/organize-location.ts` defines collection cards, remembered filing choices, arrival records, folder manifests, and indexed library records. `OrganizeLocation.tsx` supplies the primary Organize, Library, Filing choices, and Activity screens. `Organizer.tsx` supplies specialized tools under Advanced. There is one file executor and operation journal for both routes.
 
-One run executes at a time. Each run captures the workflow version, source path, mode, timestamps, per-step input/output, duration, and file effects. Edits do not rewrite history. The UI reads snapshots and receives update events through IPC. Cancel aborts an AI request or stops before the next step; file operations already in progress finish.
+`src/desktop/organize-location.ts` prepares the direct flow:
 
-## Existing files and batches
+1. Resolve and inspect the granted source. Scan only immediate loose files; existing folders are not flattened.
+2. Inspect bounded folder context inside the grant for compatible destinations.
+3. Recognize supported episodes and exact companion stems, including language variants. Recognize photo basename pairs and sidecars. Read capture dates and bounded document evidence.
+4. Group independent related sets into collection cards. Resolve remembered or existing destinations. Keep ambiguity, unsupported files, and conflicts pending in place.
+5. Construct a version 2 plan, then persist it without changing files.
 
-There are two execution paths. **File organizer** works on a collection-wide plan. The workflow editor's folder batch runs one graph independently for each file.
+`location-manager.ts` owns current-review identity, revisions, destination changes, filing rules, automatic arrivals, folder bundles, and library indexing. Renderer requests carry IDs and choices, not executable source/destination lists. A group change increments the revision. Apply checks the current ID/revision again after awaited permission checks. Rule edits invalidate the outstanding revision; they affect grouping when a location is prepared again.
 
-### Collection organizer
+### Grouping and destinations
 
-`src/shared/organizer.ts` defines scan and plan records, per-file states, saved setups, a general organizer in No AI and With AI modes, and specialized tools. `src/desktop/organizer.ts` scans, plans, applies, and undoes them; `smart-organizer.ts` composes general local grouping with bounded AI document suggestions; `collection-analysis.ts` supplies specialized analysis. `src/studio/Organizer.tsx` supplies setup forms, exclusions, category counts, grouped review, searchable rows, selection, generated-content previews, progress, and saved batch access. Collection plans remain separate from the graph schema.
+Episode recognition requires a supported video extension. Matching subtitles and known sidecars share a related-set ID with their episode. Unknown episode-looking extensions remain unsupported. A category group can contain multiple independent related sets, but the main executor rejects partial selection of any selected set.
 
-Scanning is read-only and metadata-based. It collects regular file paths, sizes, modification times, device/inode identities, and extension categories. Directory traversal skips links/junctions, hard-linked files, dot paths, named system/application locations, explicit exclusions, and folders containing recognized project markers or `.relay-preserve`. These are conservative name/marker rules, not a universal detector of every application folder or Windows hidden attribute. Unreadable entries are reported and skipped. Scans pause between completed directories after roughly 50,000 files or 200,000 visited entries; a very large single directory can exceed those targets. The pending directory list is saved, and the general organizer can review the completed section before continuing. Specialized tools still require a complete scan. One most recent scan section, including its settings, is saved locally.
+Photos use EXIF `DateTimeOriginal`, with local calendar year/month semantics. A new month folder requires at least three distinct picture stems. Missing capture dates use the general picture folder; modification time is not presented as capture time. Same-basename RAW/JPEG/XMP/AAE files travel together. Conflicting capture months hold a pair back. The primary flow does not claim image-subject recognition or exact duplicates from visual similarity.
 
-Planning resolves every destination without changing files. The general organizer can plan moves inside the source folder, into a new subfolder, or into another selected folder. It recognizes TV episode patterns and subtitles, groups photos by screenshot names, filename families, small visual thumbnail similarity, or modified month, and groups other files by type. Visual grouping compares at most 500 photos per scan section using a 9-by-8 difference hash and average color, within the same modified month. This proposes groups only; it does not identify exact duplicates or understand image subjects. Managed output folders are skipped on later scans so repeat runs do not nest them again. Existing destinations and duplicate proposed destinations are flagged and deselected; there is no automatic overwrite or suffix decision. Other specialized tools retain their own destination rules.
+Supported documents use two local text signals for a narrow set of topics: invoices, receipts, contracts, meeting notes, and study material. The UI exposes sample text and the grouping reason. Optional AI can suggest only one of those topics, with a self-reported confidence of at least 0.85. It cannot supply paths or commands. A failed suggestion falls back to local file-type evidence. This is bounded classification, not a universal understanding of a user's work.
 
-Specialized analyzers implement distinct rules:
+Explicit destination choices take precedence. Remembered choices match an exact source and collection key; the highest priority wins, and equal conflicting priorities require user resolution. Rules retain examples, an approved root's device/inode identity, and a relative target path. Missing or replaced remembered roots remain pending. Suitable existing collection folders are reused; candidate matching is restricted to recognized collection/library context. Ambiguous matches are not silently merged. Re-running an organized location does not intentionally add another category tree.
 
-- Storage cleanup composes exact duplicate review with age/size filtering. The kept copy of each duplicate group is excluded from storage moves, so later duplicate checks retain a stable keeper.
-- Combine collections uses the general organizer with a separate library destination. Prepare to share copies selected files with a checksum manifest; private-looking filenames are unselected by default and must be reviewed before inclusion.
+### Limits
 
-- Storage and age-based archives filter by size/modification age and retain relative paths. They do not compress projects.
-- Duplicate review groups by size then SHA-256. The preferred keep folder wins, followed by relative-path order. Every extra copy references a retained file whose identity/hash is rechecked before execution; extras are copied/moved to an archive, never directly deleted.
-- Photo filing reads EXIF with `exifr`, groups same-basename RAW/JPEG and `.xmp`/`.aae` sidecars, and uses capture calendar dates. Unreadable/missing metadata produces an explicit Unknown capture date folder. A user can deselect any item, so preserving complete groups also depends on review selection.
-- Backup comparison hashes relative-path pairs, skips exact matches, flags different existing targets, and proposes only missing copies. Extra backup files are untouched. Delivery copies retain relative paths and add a checksum manifest regenerated from selected, conflict-free items.
-- AI analysis proposes allowed category/name changes or exclusive JSON/Markdown writes. Each generated item retains its source identity/hash and content for inspection. The executor checks that the source still matches analysis before using it.
+| Operation               | Current implementation budget                                                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Direct preparation      | First 5,000 loose files; roughly 200 collection cards, with further distinct collections held back                                      |
+| Existing-folder context | At most 2,000 eligible folders, four levels; metadata only                                                                              |
+| Photo capture dates     | First 500 pictures                                                                                                                      |
+| Local document evidence | First 40 documents                                                                                                                      |
+| Optional image OCR      | Up to five pictures, English model                                                                                                      |
+| Optional model analysis | Up to 20 requests, at most 12,000 submitted characters each                                                                             |
+| Detail/thumbnail IPC    | 100 file rows per request; UI requests at most 12 representative thumbnails sequentially                                                |
+| Whole-folder manifest   | At most 20,000 entries; at most 10 explicitly selected top-level collections                                                            |
+| Library                 | Up to 20 indexed locations; directory sections near 50,000 files or 200,000 entries; 100 readable-document attempts per section/refresh |
+| Search                  | 100 results per page; 200-character query; up to 50 saved searches                                                                      |
+| Automatic filing        | Up to 10,000 loose files in each monitored source                                                                                       |
+| Histories               | Latest 200 organization batches shown; records are not deleted by this display limit                                                    |
 
-The main process holds the authoritative plan; the renderer sends settings and selected IDs, never an executable list of arbitrary paths. Source and external output roots require native picker grants; internal outputs derive from the source grant. All watchers must be paused. A shared active-operation lock prevents graphs and collection operations from executing together, including during the confirmation dialog. Progress uses a throttled IPC event instead of repeatedly sending the entire collection.
+A huge individual directory can exceed a library section target because section boundaries occur after directories. Directory scans still use in-memory sections. The persistent library is disk-backed, but this is not an unbounded streaming scanner. Additional documents without extraction remain name-searchable; subsequent refreshes attempt those not yet read. Document extraction accepts regular files up to 25 MB and PDFs up to 20 pages. Oversized/unreadable content falls back to file-type evidence. These are implementation budgets, not measured speed or memory guarantees.
 
-Apply rechecks every selected source identity and target path before the first write. It then processes files sequentially, records the intended operation, copies exclusively, verifies SHA-256 hashes, and removes the original only for a verified move. Hashing streams data, so this path is not restricted by the graph engine's 25 MB document limit. Cancellation interrupts scanning/hashing or stops between operations; an in-flight copy is allowed to finish. Errors stop the batch. Completed effects stay in the journal for inspection and undo. Applying the same executed plan again is rejected; create a new scan and review instead.
+## File protection and execution
 
-Generated writes use exclusive creation and a content hash, then follow the same journal/undo path as copies. Copies and restored originals retain modification time; platform-specific ACLs, alternate streams, and extended attributes are not a complete backup contract.
+`file-policy.ts` checks all actual ancestor directories for recognized project/application/game markers, managed names, and preservation markers. It is shared by scanning and mutations, with directory evidence cached per operation. The policy is conservative and cannot identify every application's data. Code projects and application/game trees remain protected even during explicit collection relocation.
 
-`organization_plans` stores metadata and `organization_items` stores ordered per-file records in SQLite. Each state update commits the changed item and plan metadata together, avoiding serialization of the entire batch for every copied file. Selection changes replace the item records transactionally. Plans use `review`, `running`, `complete`, `cancelled`, `failed`, `interrupted`, `undoing`, and `undone` states. Startup marks running/undoing plans interrupted. This history is local and separate from graph run history and optional cloud sync.
+Scanners exclude links/junctions, hard-linked files, protected names, dot paths, known save extensions, and explicit exclusions. Unreadable or excluded entries carry reasons. A `.relay-preserve` marker preserves its tree. Permission to inspect a folder never overrides these checks.
 
-Undo walks completed items in reverse. It verifies output hashes, refuses occupied original paths, restores moved files exclusively, and removes only the verified output. Changes made after execution stop undo. Newly created folders are journaled and removed on undo only when empty. Uncertain crash states (`copying`, `removing`, `restoring`, `undo-removing`) block automated undo and require manual inspection: the app never guesses which file it owns. SQLite and filesystem operations are not a single transaction; concurrent external writers can still race filesystem checks.
+Version 1 plans keep their single-root contract for specialized tools. Version 2 plans carry an approved root map and an explicit root reference on each item. The main process verifies grants; the executor verifies containment, root identity, protected context, path ancestry, and each source's size, timestamp, device, and inode. Unknown versions/references fail. Both apply and undo enforce recorded boundaries.
 
-### Graph folder batches
+Before the first write, the executor preflights all selected files. It rechecks identities and paths per operation, creates destinations exclusively, hashes source/output, and removes a source only after verified copying. No automatic overwrite, suffix, or rename resolves collisions. A related group is not a filesystem transaction: cancellation or a failure can leave a partially completed set, accurately recorded in the journal. In-flight copies finish; scanning, extraction, and hashing honor cancellation where supported.
 
-The editor can process files already present in a selected folder through **Organize existing folder**. The desktop process collects the input list before execution, skips symbolic links, excludes configured output folders, optionally walks subfolders, and caps a batch at 1,000 files. It processes files sequentially through the same engine used by a manual run, so every file receives its own run record and supported effects can be undone individually.
+Undo verifies output hashes, refuses occupied original file paths, restores exclusively, and removes only verified outputs. Run-created directories are removed only when empty. The executor does not delete newly encountered source folders during ordinary organization. File ACLs, alternate streams, and extended attributes are not a complete backup contract.
 
-The batch pauses if a file fails or the user cancels. This prevents a collision or configuration mistake from multiplying across the rest of the folder. Folder containers are never moved by the collector; only the workflow's file actions decide where each file goes. A preview still performs no writes, notifications, or AI requests. The list is collected before the first file runs, so newly created output cannot be picked up by the same batch.
+## Explicit whole collection moves
 
-All watchers must be paused before a batch starts. Existing-folder processing is a desktop feature and does not make the optional API a remote execution worker.
+The source is an explicitly selected immediate personal subfolder. `inspectBundle` records directory identities, every regular file's stamp/hash, and empty subfolders. Links, managed data, unfinished files, unsupported filesystem entries, and excessive manifests are rejected. The destination is a new collection folder under the chosen parent; an existing collection target is not merged.
 
-## Preview
+Apply verifies the entire manifest before writes, expands it into the same exclusive copy/hash/remove file journal, creates empty destination folders, and removes verified empty source directories from deepest to shallowest. Directory removal and restoration have journal states. New arrivals prevent empty-directory removal. Filesystem effects are sequential rather than atomic; incomplete moves remain inspectable with guarded undo. Uncertain file or directory crash windows block automated recovery.
 
-Preview reads and extracts the selected file, evaluates deterministic conditions, and resolves filenames. It performs no file writes, notifications, or AI requests. AI-dependent output is explicitly unresolved. If an AI-dependent branch or rename prevents a reliable downstream plan, preview stops rather than inventing data.
+## Remembered choices and automatic filing
 
-A successful preview is a simulation result, not proof that an AI provider is configured or that a subsequent real run will succeed. Files and permissions may change between preview and execution.
+SQLite stores exact scoped choices with examples, priority, enabled state, and destination identity. No broad rule is inferred from a correction. The UI can edit the title, destination, priority, or enabled state, or delete a choice.
 
-## Files and recovery
+The automatic monitor polls enabled locations every 15 seconds while Relay is open and idle. It scans immediate files only. On first enable, existing files are recorded as pending for manual review. New/changed arrivals persist a size/timestamp/device/inode stamp and must stay stable for at least 10 seconds before eligibility. Restart reconciliation compares the actual location against durable arrival records.
 
-The graph engine supports copy, move, rename, and exclusive text-file creation. Existing destinations are never overwritten. Filenames reject separators, traversal, control characters, and Windows reserved names. Symbolic-link inputs are rejected by the engine. Each graph input file has a 25 MB limit; collection organizer copies/moves use streaming hashes and do not have that limit.
+Only unambiguous groups matching an enabled remembered choice can execute. All related members must be stable. No automatic AI request or whole-folder relocation occurs. Uncertain arrivals remain physically in place. Claims and plan IDs are persisted before execution; interrupted claims are held for inspection rather than retried. Failures pause that location. Completed arrival metadata is bounded to the latest 2,000 per location; unresolved records remain.
 
-Moves use exclusive copy, hash verification, and source removal, supporting cross-volume moves. Effects are recorded in SQLite as execution progresses. Undo walks those effects backwards, verifies content hashes, refuses conflicting restore paths, and persists partial undo progress. Modified files are not removed by undo. Notifications and AI requests cannot be reversed.
+Direct outputs inside subfolders are not watched again. Filing into another enabled tidy source is rejected to prevent cross-location loops. Undo pauses automatic filing for its source and marks restored tracked arrivals pending, preventing immediate re-filing. The monitor is independent of graph watchers, which have an ephemeral bounded queue and start paused after restart. Scheduled specialized setups prepare reviews; they do not apply them.
 
-Filesystem operations and SQLite updates are not one transaction. A process or power failure between a filesystem operation and its journal update can leave an unjournaled effect. Interrupted runs are marked on startup; inspect their paths before rerunning. This version does not claim crash-atomic or exactly-once filesystem execution. It also cannot eliminate races caused by other programs editing the same files concurrently.
+## Library index
 
-## Watching
+`library_files` stores scoped paths, category, file identity, bounded text, and a completed traversal-generation marker. Refresh reuses text for unchanged sources. SQLite filters/searches the stored fields and pages results; it does not load the entire inventory into the renderer. Matching uses literal substring search, not ranked full-text or semantic search.
 
-Chokidar watches only files directly inside the chosen folder. Existing files are ignored and new files must stabilize for 1.5 seconds. Symbolic links are not followed. A bounded queue holds up to 100 arrivals and runs them sequentially; an overflow notification tells the user to process missed files manually.
+Only a completed full traversal removes records not seen in that generation. Partial sections retain prior rows and pending directories. Cancellation leaves the prior complete index rather than presenting it as fresh. External locations retain cached records while offline. Root device/inode identity detects replacement. Remove index deletes only local metadata. Saved searches are virtual collections; they never relocate files or import originals into private storage.
 
-Watchers start paused after restart. Editing a watched workflow pauses it. Watching does not run when the application is closed. A move must precede a rename in watched workflows, outputs must be outside their source folder, and chains between active watched folders are blocked to avoid loops. Queue contents are not persisted across restarts. A failed run remains in history; no automatic retry risks repeating effects.
+## Storage and recovery
 
-## AI
+The existing `relay.sqlite` remains authoritative. `organization_plans` holds plan metadata and `organization_items` holds ordered per-file journal entries. Whole-folder manifests are stored separately in `location_records` to avoid rewriting them for every file transition. The same additive table stores rules, tidy locations, arrivals, library scopes, and saved searches. `library_files` has indexed scope/path fields. Existing workflows and version 1 journals remain readable.
 
-Ollama is restricted to loopback addresses. Cloud providers must use HTTPS and the OpenAI-compatible Chat Completions schema. Redirects are rejected. Cloud document processing requires an explicit setting. Requests have a 120-second timeout and a 60,000-character text limit.
+Startup marks running/undoing plans interrupted. Uncertain states such as copying, removing, restoring, and undo-removing require inspection. SQLite and filesystem operations cannot commit atomically, and external writers can race checks. No exactly-once delivery or crash-atomic collection guarantee is claimed.
 
-API keys are encrypted using Electron safeStorage and are never returned to the renderer. Insecure plaintext storage backends are rejected. Changing the endpoint without supplying a replacement key clears the old key. Model names are entered explicitly; the app does not download models or subscribe users to services.
+Paths, snippets, indexes, prompts, and journals are plaintext local data. AI keys use the operating system credential store. Quit before backing up the user-data directory, including WAL files. The API does not sync organizer data or execute desktop jobs.
 
-Structured output requires user-selected string fields. Missing fields or invalid JSON fail the step. Model output cannot execute tools or shell commands. It can influence configured templates, where safe filename checks still apply. Empty field values are allowed and should be considered when designing naming patterns.
+## Toolbox, workflows, and optional API
 
-Collection AI uses bounded extraction in `documents.ts`: text formats, DOCX through Mammoth raw-text extraction, PDF text through pdf-parse, and Tesseract.js OCR for images or PDF pages with no extractable text. Inputs cap at 25 MB and PDFs at 20 pages. OCR uses a bundled English trained-data package, a worker with a 120-second limit, and termination on cancellation. It needs no runtime language download. OCR is text recognition, not image-subject understanding.
+`toolbox.ts` uses the existing native canvas for pictures, pdf-lib for PDF creation/merge/extraction, and `documents.ts` for extraction/OCR. Outputs use exclusive new files in Documents/Relay Results; source files remain. Recent metadata is limited to 30 entries. Toolbox jobs are not durable queued jobs.
 
-Before analysis the main process shows the provider, model, endpoint, and request/text budget. Cloud processing still requires the global opt-in and credential. Up to 100 files/requests, 60,000 characters per document, and 1,000,000 submitted characters per batch are allowed. Excess files and extraction failures appear in analysis notes; text is not silently truncated. Provider failures stop further requests. Model confidence is a self-reported hint, not a calibrated probability. Required fields, category allowlists, safe names, receipt field formats, and a user-selected confidence threshold gate proposed operations. JSON/Markdown is shown as plain text before writing.
+The workflow engine validates one trigger, at most 40 steps, and a sequential graph without joins, cycles, duplicate outputs, or unreachable execution steps. Preview reads and evaluates deterministic steps without AI, writes, or notifications; AI-dependent output remains unresolved. Real runs keep per-step journals and support guarded file undo. Graph inputs cap at 25 MB; organizer file copies stream hashes without that document-size limit. Graph folder batches cap at 1,000 files.
 
-The local `organization_ai_cache` table retains at most 500 results, keyed by source hash, model/provider/endpoint, prompt/schema, extraction settings, and limits. Failed validation is not cached. This avoids repeated model calls without trusting a stale source. Results and generated drafts are plaintext local data, as are other journal contents. The cache is not synced to the workspace API. Changing credentials alone does not change cache identity; changing model, endpoint, prompt, or content does.
+Graph watching uses Chokidar at depth zero, a 1.5-second stabilization interval, and an ephemeral queue of at most 100 arrivals. It starts paused after restart, blocks output chains, and stops on failure. This differs from the durable remembered-choice monitor above.
 
-Implementation references: [Tesseract local installation](https://github.com/naptha/tesseract.js/blob/master/docs/local-installation.md), [Mammoth raw text](https://github.com/mwilliamson/mammoth.js), and [exifr](https://github.com/MikeKovarik/exifr).
+Ollama is restricted to loopback endpoints. Cloud AI endpoints require HTTPS, explicit document-processing opt-in, and an encrypted user key. Redirects are rejected; requests time out after 120 seconds. The model has no filesystem or shell tools. Tesseract uses bundled English data; Arabic document text can be classified, but Arabic OCR/visual subjects need separate model work.
 
-## Scheduled reviews
+The optional self-hosted API stores accounts, graph recipes, share links, and compact run summaries. Recipes can contain folder-path strings. Files and AI keys are not uploaded. Desktop execution remains local.
 
-`maintenance.ts` claims one due saved setup at a time. Its next timestamp and an unfinished-run message are persisted before scanning. A 30-second desktop timer calls the queue only when no graph/organizer operation or watcher is active. On restart an overdue schedule runs once, with the next due time measured from that run; missed intervals are not replayed. Errors are recorded and reported, without automatic immediate retries. Manual saved setups can use AI after confirmation; enabled schedules cannot use AI. Scheduled results are plans awaiting review, never automatic file actions. Schedules require the running desktop application and are unrelated to cloud job dispatch.
+## Validation status
 
-## Storage and limits
-
-SQLite uses WAL mode. Workflow saves and run-journal updates are individual database transactions. The history UI shows the latest 100 runs; older records remain on disk. Document excerpts (up to 5,000 characters per step), paths, and prompts are stored locally in plaintext. Credentials are encrypted, not the entire workspace. Quit the application before backing up the user-data directory, including any remaining WAL files.
-
-The app has no remote desktop-file execution, background Windows service, arbitrary scripts, parallel graph branches, loops, spreadsheet connector, or team invitations. The backend supports accounts, graph-workflow sync, sharing, and run summaries. Remote execution would require a separate authenticated worker/dispatch design. Windows is the tested distribution target. `RELAY_DATA_DIR` can point both development and packaged builds at an isolated local workspace; packaged smoke tests use it instead of touching personal data.
+The source passes TypeScript and production builds, 58 unit tests, and 7 Electron end-to-end tests. The end-to-end coverage includes synthetic organization, apply/undo, library indexing/search, collection templates, existing-folder workflows, recipe editing, watcher persistence, and toolbox actions. Refreshed screenshots are in `docs/`. Large-library performance and packaged size have not been measured. Installer, tag, and release checks remain for the owner.

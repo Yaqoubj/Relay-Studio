@@ -4,9 +4,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { collectFiles } from '../src/desktop/batch';
+import { createPersonalTemp } from './support/personal-temp';
 
 test('existing folder collection includes nested files only when requested and excludes outputs', async (t) => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'relay-batch-'));
+  const root = await createPersonalTemp('batch-');
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const nested = path.join(root, 'nested');
   const output = path.join(root, 'archive');

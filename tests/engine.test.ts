@@ -10,8 +10,9 @@ import { Store } from '../src/desktop/database';
 import { transform, validateEndpoint } from '../src/desktop/ai';
 import { createServer } from 'node:http';
 import type { Workflow, Kind, Run, AISettings } from '../src/shared/types';
+import { createPersonalTemp } from './support/personal-temp';
 async function setup(t: { after(fn: () => Promise<void>): void }) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'relay-test-'));
+  const dir = await createPersonalTemp('engine-');
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const source = path.join(dir, 'input.txt'),
     output = path.join(dir, 'output');

@@ -1,29 +1,27 @@
 # Implementation scope
 
-## Working features
+## Implemented and source-validated
 
-- Recursive collection scans, exclusions, project preservation, bounded traversal, saved inventories, and cancellation.
-- Persisted versioned plans, collision detection, item selection, generated-content preview, execution confirmation, and guarded batch undo.
-- General mixed-folder organization with No AI and With AI modes, internal or external placement, episode/subtitle grouping, photo filename families, group selection, partial drive reviews, scan continuation, and removal of empty folders created by an undone batch.
-- Broad collection goals for combining folders into a library, reviewing duplicate and old large files together, preparing a delivery with private-name flags, and scheduling repeat reviews.
-- Nine no-AI templates: drive organization, downloads cleanup, renaming, storage review, exact duplicate review, photo capture-date filing, age-based archiving, delivery manifests, and backup comparison.
-- Seven AI templates: document filing, receipt records, meeting actions, research reading notes, screenshot filing, named-topic grouping, and filing advice.
-- Local text/PDF/DOCX extraction and bundled English OCR; model-request and text budgets, result validation, confidence gates, cancellation, and bounded caching.
-- Reusable folder setups and persistent schedules that prepare reviews while the desktop app is open. One missed-run catch-up; no unattended file modifications or AI calls.
-- Visual graph workflows, file watching, portable graph recipes, and an optional self-hosted workspace API.
+- Primary collection-card organizer with automatic preparation, existing destination matching, original filenames, related sets, revision checks, and one apply action.
+- Episodes/subtitles, photo capture dates and sidecars, local document clues, optional constrained AI, and inspectable evidence.
+- Exact scoped filing choices with examples, destination identity, priority conflicts, editing, disabling, and deletion.
+- Durable stable-arrival monitoring, first-enable baseline, pending uncertain files, restart reconciliation, output-loop checks, per-location pause, and shared file journals.
+- Explicit personal whole-folder manifests, verified cross-volume copy/removal, empty-folder handling, and guarded undo. Application/game/code trees remain protected.
+- Scoped SQLite library indexes, incremental content reuse, section continuation, offline state, paged search, and saved searches.
+- Desktop Home/organizer/navigation redesign; picture/PDF/text toolbox and advanced graph/specialized tools retained.
 
-## Boundaries
+The production build, 58 unit tests, and 7 Electron end-to-end tests pass. See [validation and screenshots](organizer-test-handoff.md). Large-library performance and packaged size have not been measured. Installer publication and tags belong to the owner.
 
-- **Collection composition:** templates use dedicated forms and a shared plan contract. Arbitrary collection nodes on the graph canvas need a separate schema and editor design.
-- **Project archives:** detected code projects stay together and are excluded. The archive template moves/copies old files; it does not compress projects or promise restorable project snapshots.
-- **Backups:** verification compares hashes and repairs missing files. It does not replace versioned backups, retention policies, or disaster-recovery tooling.
-- **AI grouping:** users supply allowed categories or project names. The model is not an unrestricted clustering or filesystem agent. Screenshots are classified from OCR text, not visual image understanding.
-- **General AI mode:** supported documents receive text-based topic and name suggestions. Photos use names, dates, and local thumbnail comparison. Image-subject understanding would require a vision-capable connection and dedicated validation.
-- **Large scans:** section state is saved so pending directories can be continued, but each section is still held in memory and the app does not yet have a fully disk-backed, paged inventory. Very large individual directories can exceed section targets.
-- **Remote workers:** the API stores accounts, graph recipes, share links, and run summaries. It does not dispatch desktop jobs, sync collection journals, or grant remote disk access.
-- **Background execution:** schedules require the open desktop app. A Windows service would need worker ownership, authenticated dispatch, durable queues, permission management, and a separate review interface.
-- **Recovery:** filesystem effects and SQLite cannot commit atomically. Uncertain crash states require inspection; the executor does not guess ownership or promise exactly-once delivery.
+## Deliberate boundaries
 
-## Possible extensions
+Ordinary organization handles loose files without dismantling existing folders. Whole-folder relocation is an explicit action. Local content classification covers a small set of supported document topics; it does not understand every collection. Photo grouping uses metadata, not image subjects. OCR uses English data.
 
-Image-subject understanding, a disk-backed paged inventory, multi-language OCR, whole-project archive verification, collection graph composition, authenticated desktop worker dispatch, and versioned backup policies. Each needs its own design and tests.
+Automatic filing needs approved remembered rules and an open app. It does not run paid AI unattended, relocate bundles, silently retry interrupted claims, or operate as a Windows service. Graph watchers and scheduled review templates have separate documented behavior.
+
+The library is a searchable snapshot, not a live exhaustive filesystem catalog. Section scans still use bounded in-memory inventories. Search is literal text matching rather than semantic retrieval. Index removal never deletes originals.
+
+SQLite and filesystem effects are not one atomic transaction. Unknown crash states require inspection. Verified undo is not disaster recovery. File actions do not promise preservation of every platform-specific attribute.
+
+## Further work
+
+Arabic OCR after a separate model/quality decision, image-subject recognition, ranked full-text search, fully streaming inventories, authenticated remote desktop workers, Windows service execution, and versioned backups need separate designs. No placeholder buttons represent these features as available.
